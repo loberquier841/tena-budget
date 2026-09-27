@@ -1,0 +1,32 @@
+{
+  "name": "@tena/web",
+  "private": true,
+  "scripts": {
+    "dev": "next dev -p 3000",
+    "build": "next build",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:e2e": "playwright test",
+    "lint": "next lint"
+  },
+  "dependencies": {
+    "next": "^14.2.0",
+    "react": "^18.3.0",
+    "react-dom": "^18.3.0",
+    "dexie": "^4.0.8",
+    "next-pwa": "^5.6.0",
+    "recharts": "^2.12.0",
+    "@tena/db": "workspace:*",
+    "@tena/core": "workspace:*",
+    "@tena/shared": "workspace:*",
+    "@tena/import-engine": "workspace:*",
+    "@tena/banking": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.0",
+    "@types/node": "^20.0.0",
+    "@types/react": "^18.0.0",
+    "vitest": "^1.4.0",
+    "@playwright/test": "^1.42.0"
+  }
+}

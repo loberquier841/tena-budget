@@ -1,0 +1,16 @@
+
+{
+  "buildCommand": "pnpm build",
+  "installCommand": "pnpm install",
+  "framework": "nextjs",
+  "functions": {
+    "apps/web/app/api/**/*.ts": {
+      "maxDuration": 10
+    }
+  },
+  "env": {
+    "DATABASE_URL": "@database-url",
+    "AUTH_SECRET": "@auth-secret",
+    "NEXTAUTH_URL": "@nextauth-url"
+  }
+}

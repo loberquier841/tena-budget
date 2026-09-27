@@ -1,0 +1,16 @@
+{
+  "name": "@tena/db",
+  "main": "./src/index.ts",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "db:generate": "prisma generate"
+  },
+  "dependencies": {
+    "@prisma/client": "^5.12.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "prisma": "^5.12.0",
+    "typescript": "^5.4.0"
+  }
+}

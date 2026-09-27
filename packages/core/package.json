@@ -1,0 +1,19 @@
+{
+  "name": "@tena/core",
+  "main": "./src/index.ts",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@tena/shared": "workspace:*",
+    "bcryptjs": "^2.4.3",
+    "dexie": "^4.0.8",
+    "@tena/import-engine": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.0",
+    "vitest": "^1.4.0",
+    "@types/bcryptjs": "^2.4.6"
+  }
+}
