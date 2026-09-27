@@ -45,6 +45,11 @@ CREATE TABLE "Budget" (
     "type" TEXT NOT NULL,
     "year" INTEGER NOT NULL,
     "month" INTEGER,
+    "categoryId" TEXT,
+    "personId" TEXT,
+    "amountCents" INTEGER NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
 
     CONSTRAINT "Budget_pkey" PRIMARY KEY ("id")
 );
@@ -68,9 +73,15 @@ CREATE TABLE "Transaction" (
     "label" TEXT NOT NULL,
     "source" TEXT NOT NULL,
     "categoryId" TEXT,
-    "personId" TEXT,
+    "subCategoryId" TEXT,
+    "personId" TEXT NOT NULL,
+    "budgetId" TEXT,
+    "notes" TEXT,
     "isDeleted" BOOLEAN NOT NULL DEFAULT false,
+    "deletedAt" TIMESTAMP(3),
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+    "createdByUserId" TEXT NOT NULL,
 
     CONSTRAINT "Transaction_pkey" PRIMARY KEY ("id")
 );
@@ -264,6 +275,21 @@ CREATE UNIQUE INDEX "User_email_key" ON "User"("email");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "FamilyMember_userId_familyId_key" ON "FamilyMember"("userId", "familyId");
+
+-- CreateIndex
+CREATE INDEX "Budget_familyId_year_month_idx" ON "Budget"("familyId", "year", "month");
+
+-- CreateIndex
+CREATE INDEX "Budget_familyId_personId_idx" ON "Budget"("familyId", "personId");
+
+-- CreateIndex
+CREATE INDEX "Transaction_familyId_bookingDate_idx" ON "Transaction"("familyId", "bookingDate");
+
+-- CreateIndex
+CREATE INDEX "Transaction_familyId_personId_idx" ON "Transaction"("familyId", "personId");
+
+-- CreateIndex
+CREATE INDEX "Transaction_familyId_budgetId_idx" ON "Transaction"("familyId", "budgetId");
 
 -- CreateIndex
 CREATE INDEX "RecurringRule_familyId_isActive_idx" ON "RecurringRule"("familyId", "isActive");

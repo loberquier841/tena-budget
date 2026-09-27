@@ -52,7 +52,15 @@ model Budget {
   type String // annual, monthly
   year Int
   month Int?
+  categoryId String?
+  personId String?
+  amountCents Int
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
   family Family @relation(fields: [familyId], references: [id])
+
+  @@index([familyId, year, month])
+  @@index([familyId, personId])
 }
 
 model Category {
@@ -70,9 +78,19 @@ model Transaction {
   label String
   source String // manual, import, bank
   categoryId String?
-  personId String?
+  subCategoryId String?
+  personId String
+  budgetId String?
+  notes String?
   isDeleted Boolean @default(false)
+  deletedAt DateTime?
   createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  createdByUserId String
+
+  @@index([familyId, bookingDate])
+  @@index([familyId, personId])
+  @@index([familyId, budgetId])
 }
 
 model RecurringRule {
