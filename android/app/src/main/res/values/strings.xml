@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">TENΛ Budget</string>
+    <string name="title_activity_main">TENΛ Budget</string>
+    <string name="package_name">fr.tena.budget</string>
+    <string name="custom_url_scheme">fr.tena.budget</string>
+</resources>

@@ -1,0 +1,25 @@
+{
+  "name": "@tena/desktop",
+  "version": "1.0.0",
+  "main": "main.js",
+  "description": "TENA Budget offline",
+  "author": "TENA",
+  "scripts": {
+    "dev": "electron . --no-sandbox",
+    "build": "electron-builder --linux --dir",
+    "build:appimage": "electron-builder --linux"
+  },
+  "build": {
+    "appId": "fr.tena.budget",
+    "productName": "TENA Budget",
+    "electronVersion": "44.5.1",
+    "files": ["main.js", "../mobile/dist/**/*"],
+    "linux": {
+      "target": ["dir", "AppImage"]
+    }
+  },
+  "devDependencies": {
+    "electron": "44.5.1",
+    "electron-builder": "26.15.3"
+  }
+}
