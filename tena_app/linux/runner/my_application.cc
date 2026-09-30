@@ -54,6 +54,14 @@ static void my_application_activate(GApplication* application) {
 
   gtk_window_set_default_size(window, 1280, 720);
 
+  // Icône officielle TENΛ Budget
+  GdkPixbuf* tena_icon = gdk_pixbuf_new_from_file(
+      "linux/runner/icons/tena_icon.png", nullptr);
+  if (tena_icon != nullptr) {
+    gtk_window_set_icon(window, tena_icon);
+    g_object_unref(tena_icon);
+  }
+
   g_autoptr(FlDartProject) project = fl_dart_project_new();
   fl_dart_project_set_dart_entrypoint_arguments(
       project, self->dart_entrypoint_arguments);

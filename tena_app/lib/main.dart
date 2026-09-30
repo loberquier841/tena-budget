@@ -58,6 +58,12 @@ class _TenaHomeState extends State<TenaHome> {
       appBar: AppBar(
         title: Row(
           children: [
+            Image.asset(
+              'assets/tena_icon.png',
+              width: 32,
+              height: 32,
+            ),
+            const SizedBox(width: 10),
             const Text(
               'TENΛ',
               style: TextStyle(fontWeight: FontWeight.bold),
@@ -94,14 +100,24 @@ class _TenaHomeState extends State<TenaHome> {
           child: ListView(
             padding: const EdgeInsets.symmetric(vertical: 12),
             children: [
-              const Padding(
-                padding: EdgeInsets.fromLTRB(20, 10, 20, 20),
-                child: Text(
-                  'TENΛ Budget',
-                  style: TextStyle(
-                    fontSize: 22,
-                    fontWeight: FontWeight.bold,
-                  ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 10, 20, 20),
+                child: Row(
+                  children: [
+                    Image.asset(
+                      'assets/tena_icon.png',
+                      width: 42,
+                      height: 42,
+                    ),
+                    const SizedBox(width: 12),
+                    const Text(
+                      'TENΛ Budget',
+                      style: TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
                 ),
               ),
               for (int i = 0; i < pages.length; i++)
@@ -224,10 +240,10 @@ class DashboardPage extends StatelessWidget {
               padding: const EdgeInsets.all(22),
               child: Row(
                 children: [
-                  Icon(
-                    Icons.auto_awesome,
-                    size: 32,
-                    color: Theme.of(context).colorScheme.primary,
+                  Image.asset(
+                    'assets/tena_icon.png',
+                    width: 42,
+                    height: 42,
                   ),
                   const SizedBox(width: 16),
                   const Expanded(
