@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'pages/transactions_page.dart';
 
 void main() {
   runApp(const TenaBudgetApp());
@@ -142,6 +143,10 @@ class _TenaHomeState extends State<TenaHome> {
   Widget _buildPage(_Page page) {
     if (selectedIndex == 0) {
       return const DashboardPage();
+    }
+
+    if (selectedIndex == 2) {
+      return const TransactionsPage();
     }
 
     return Center(
