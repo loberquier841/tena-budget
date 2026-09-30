@@ -1,5 +1,10 @@
 import 'package:flutter/material.dart';
 import 'pages/transactions_page.dart';
+import 'models/finance_summary.dart';
+import 'widgets/finance_chart.dart';
+import 'package:fl_chart/fl_chart.dart';
+import 'models/transaction.dart';
+import 'services/finance_service.dart';
 
 void main() {
   runApp(const TenaBudgetApp());
@@ -94,8 +99,6 @@ class _TenaHomeState extends State<TenaHome> {
           ),
         ],
       ),
-
-      // Navigation desktop/tablette
       drawer: Drawer(
         child: SafeArea(
           child: ListView(
@@ -135,7 +138,6 @@ class _TenaHomeState extends State<TenaHome> {
           ),
         ),
       ),
-
       body: _buildPage(current),
     );
   }
@@ -183,124 +185,333 @@ class _TenaHomeState extends State<TenaHome> {
   }
 }
 
-class DashboardPage extends StatelessWidget {
+class DashboardPage extends StatefulWidget {
   const DashboardPage({super.key});
 
   @override
+  State<DashboardPage> createState() => _DashboardPageState();
+}
+
+class _DashboardPageState extends State<DashboardPage> {
+  late Future<FinanceSummary> _summaryFuture;
+
+  DateTime _selectedMonth = DateTime(
+    DateTime.now().year,
+    DateTime.now().month,
+  );
+
+  @override
+  void initState() {
+    super.initState();
+    _loadMonth();
+  }
+
+  void _loadMonth() {
+    _summaryFuture = FinanceService.getSummaryForMonth(_selectedMonth);
+  }
+
+  void _changeMonth(int amount) {
+    setState(() {
+      _selectedMonth = DateTime(
+        _selectedMonth.year,
+        _selectedMonth.month + amount,
+      );
+
+      _loadMonth();
+    });
+  }
+
+  String _monthName(DateTime date) {
+    const months = [
+      'Janvier',
+      'Février',
+      'Mars',
+      'Avril',
+      'Mai',
+      'Juin',
+      'Juillet',
+      'Août',
+      'Septembre',
+      'Octobre',
+      'Novembre',
+      'Décembre',
+    ];
+
+    return months[date.month - 1];
+  }
+
+  String _money(double value) {
+    return '${value.toStringAsFixed(2).replaceAll('.', ',')} €';
+  }
+
+  List<FlSpot> _chartSpots(
+    List<Transaction> transactions,
+    TransactionType type,
+  ) {
+    final spots = <FlSpot>[];
+
+    for (var i = 0; i < transactions.length; i++) {
+      final transaction = transactions[i];
+
+      if (transaction.type == type) {
+        spots.add(
+          FlSpot(
+            i.toDouble(),
+            transaction.amount,
+          ),
+        );
+      }
+    }
+
+    return spots;
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'Bonjour 👋',
-            style: TextStyle(
-              fontSize: 32,
-              fontWeight: FontWeight.bold,
+    return FutureBuilder<FinanceSummary>(
+      future: _summaryFuture,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(
+            child: CircularProgressIndicator(),
+          );
+        }
+
+        if (snapshot.hasError) {
+          return Center(
+            child: Text(
+              'Impossible de charger le budget.',
+              style: TextStyle(color: Colors.grey),
             ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            'Voici la situation de ton budget.',
-            style: TextStyle(
-              color: Colors.grey.shade400,
-              fontSize: 16,
-            ),
-          ),
+          );
+        }
 
-          const SizedBox(height: 28),
+        final summary = snapshot.data!;
 
-          Wrap(
-            spacing: 16,
-            runSpacing: 16,
-            children: const [
-              _StatCard(
-                title: 'Solde',
-                value: '0,00 €',
-                icon: Icons.account_balance_wallet_outlined,
-              ),
-              _StatCard(
-                title: 'Dépenses',
-                value: '0,00 €',
-                icon: Icons.arrow_upward,
-              ),
-              _StatCard(
-                title: 'Épargne',
-                value: '0,00 €',
-                icon: Icons.savings_outlined,
-              ),
-              _StatCard(
-                title: 'Objectifs',
-                value: '0',
-                icon: Icons.track_changes_outlined,
-              ),
-            ],
-          ),
+        final chartLabels = summary.allTransactions.map((transaction) {
+          return '${transaction.date.day}/${transaction.date.month}';
+        }).toList();
 
-          const SizedBox(height: 28),
+        return SingleChildScrollView(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Bonjour 👋',
+                style: TextStyle(
+                  fontSize: 32,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                'Voici la situation de ton budget.',
+                style: TextStyle(
+                  color: Colors.grey.shade400,
+                  fontSize: 16,
+                ),
+              ),
 
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(22),
-              child: Row(
-                children: [
-                  Image.asset(
-                    'assets/tena_icon.png',
-                    width: 42,
-                    height: 42,
+              const SizedBox(height: 24),
+
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 10,
                   ),
-                  const SizedBox(width: 16),
-                  const Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'TENΛ IA',
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                          ),
+                  child: Row(
+                    children: [
+                      IconButton(
+                        tooltip: 'Mois précédent',
+                        onPressed: () => _changeMonth(-1),
+                        icon: const Icon(Icons.chevron_left),
+                      ),
+                      Expanded(
+                        child: Column(
+                          children: [
+                            const Text(
+                              'Période',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.grey,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              '${_monthName(_selectedMonth)} ${_selectedMonth.year}',
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(
+                                fontSize: 20,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
                         ),
-                        SizedBox(height: 5),
-                        Text(
-                          'L’assistant financier sera disponible ici.',
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-
-          const SizedBox(height: 24),
-
-          const Text(
-            'Activité récente',
-            style: TextStyle(
-              fontSize: 22,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-
-          const SizedBox(height: 12),
-
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(24),
-              child: Center(
-                child: Text(
-                  'Aucune transaction pour le moment.',
-                  style: TextStyle(
-                    color: Colors.grey.shade400,
+                      ),
+                      IconButton(
+                        tooltip: 'Mois suivant',
+                        onPressed: () => _changeMonth(1),
+                        icon: const Icon(Icons.chevron_right),
+                      ),
+                    ],
                   ),
                 ),
               ),
-            ),
+
+              const SizedBox(height: 24),
+
+              Wrap(
+                spacing: 16,
+                runSpacing: 16,
+                children: [
+                  _StatCard(
+                    title: 'Solde',
+                    value: _money(summary.balance),
+                    icon: Icons.account_balance_wallet_outlined,
+                  ),
+                  _StatCard(
+                    title: 'Dépenses',
+                    value: _money(summary.expenses),
+                    icon: Icons.arrow_upward,
+                  ),
+                  _StatCard(
+                    title: 'Revenus',
+                    value: _money(summary.income),
+                    icon: Icons.arrow_downward,
+                  ),
+                  _StatCard(
+                    title: 'Transactions',
+                    value: '${summary.recentTransactions.length}',
+                    icon: Icons.receipt_long_outlined,
+                  ),
+                ],
+              ),
+
+              const SizedBox(height: 28),
+
+              if (summary.recentTransactions.isNotEmpty) ...[
+                const Text(
+                  'Évolution financière',
+                  style: TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: FinanceChart(
+                      income: _chartSpots(
+                        summary.allTransactions,
+                        TransactionType.income,
+                      ),
+                      expenses: _chartSpots(
+                        summary.allTransactions,
+                        TransactionType.expense,
+                      ),
+                      labels: chartLabels,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 28),
+              ],
+
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(22),
+                  child: Row(
+                    children: [
+                      Image.asset(
+                        'assets/tena_icon.png',
+                        width: 42,
+                        height: 42,
+                      ),
+                      const SizedBox(width: 16),
+                      const Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'TENΛ IA',
+                              style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            SizedBox(height: 5),
+                            Text(
+                              'L’assistant financier sera disponible ici.',
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: 24),
+
+              Text(
+                'Activité de ${_monthName(_selectedMonth)}',
+                style: const TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+
+              const SizedBox(height: 12),
+
+              if (summary.recentTransactions.isEmpty)
+                Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Center(
+                      child: Text(
+                        'Aucune transaction pour ce mois.',
+                        style: TextStyle(
+                          color: Colors.grey.shade400,
+                        ),
+                      ),
+                    ),
+                  ),
+                )
+              else
+                Card(
+                  child: Column(
+                    children: summary.recentTransactions.map((transaction) {
+                      final isIncome =
+                          transaction.type == TransactionType.income;
+
+                      return ListTile(
+                        leading: Icon(
+                          isIncome
+                              ? Icons.arrow_downward
+                              : Icons.arrow_upward,
+                        ),
+                        title: Text(
+                          transaction.description.isEmpty
+                              ? transaction.category
+                              : transaction.description,
+                        ),
+                        subtitle: Text(transaction.category),
+                        trailing: Text(
+                          '${isIncome ? '+' : '-'}${_money(transaction.amount)}',
+                          style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                ),
+            ],
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 }
