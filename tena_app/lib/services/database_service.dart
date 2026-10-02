@@ -25,6 +25,7 @@ class DatabaseService {
       sqfliteFfiInit();
       databaseFactory = databaseFactoryFfi;
     }
+
     final databasesPath = await getDatabasesPath();
     final path = join(databasesPath, 'tena_budget.db');
 
@@ -60,6 +61,33 @@ class DatabaseService {
         'type': transaction.type.name,
       },
       conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+  }
+
+  Future<void> updateTransaction(model.Transaction transaction) async {
+    final db = await database;
+
+    await db.update(
+      'transactions',
+      {
+        'amount': transaction.amount,
+        'category': transaction.category,
+        'description': transaction.description,
+        'date': transaction.date.toIso8601String(),
+        'type': transaction.type.name,
+      },
+      where: 'id = ?',
+      whereArgs: [transaction.id],
+    );
+  }
+
+  Future<void> deleteTransaction(String id) async {
+    final db = await database;
+
+    await db.delete(
+      'transactions',
+      where: 'id = ?',
+      whereArgs: [id],
     );
   }
 
