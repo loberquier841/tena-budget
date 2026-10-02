@@ -86,8 +86,6 @@ class _TransactionsPageState extends State<TransactionsPage> {
 
   double get _balance => _income - _expenses;
 
-  int get _transactionCount => _filteredTransactions.length;
-
   String _money(double value) {
     return '${value.toStringAsFixed(2).replaceAll('.', ',')} €';
   }

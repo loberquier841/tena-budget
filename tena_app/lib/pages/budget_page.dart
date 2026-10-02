@@ -260,18 +260,18 @@ class _BudgetPageState extends State<BudgetPage> {
                     const Text(
                       'Budget global',
                       style: TextStyle(
-                        fontSize: 18,
+                        fontSize: 20,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 20),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Text(
                           _money(_totalExpenses),
                           style: const TextStyle(
-                            fontSize: 28,
+                            fontSize: 32,
                             fontWeight: FontWeight.bold,
                           ),
                         ),
@@ -279,21 +279,28 @@ class _BudgetPageState extends State<BudgetPage> {
                           _globalBudget > 0
                               ? '/ ${_money(_globalBudget)}'
                               : 'Aucun budget défini',
+                          style: const TextStyle(
+                            fontSize: 20,
+                          ),
                         ),
                       ],
                     ),
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 16),
                     LinearProgressIndicator(
                       value: globalProgress,
-                      minHeight: 10,
+                      minHeight: 12,
                     ),
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 16),
                     Text(
                       _globalBudget > 0
                           ? globalRemaining >= 0
                                 ? 'Il reste ${_money(globalRemaining)}'
                                 : 'Dépassement de ${_money(-globalRemaining)}'
                           : 'Définis un budget global pour suivre ton mois.',
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w500,
+                      ),
                     ),
                   ],
                 ),
@@ -332,7 +339,7 @@ class _BudgetPageState extends State<BudgetPage> {
                                 child: Text(
                                   category,
                                   style: const TextStyle(
-                                    fontSize: 16,
+                                    fontSize: 18,
                                     fontWeight: FontWeight.bold,
                                   ),
                                 ),
@@ -341,6 +348,9 @@ class _BudgetPageState extends State<BudgetPage> {
                                 budget > 0
                                     ? '${_money(spent)} / ${_money(budget)}'
                                     : _money(spent),
+                                style: const TextStyle(
+                                  fontSize: 16,
+                                ),
                               ),
                               IconButton(
                                 onPressed: () => _editCategoryBudget(category),
@@ -348,12 +358,12 @@ class _BudgetPageState extends State<BudgetPage> {
                               ),
                             ],
                           ),
-                          const SizedBox(height: 8),
+                          const SizedBox(height: 12),
                           LinearProgressIndicator(
                             value: progress,
-                            minHeight: 8,
+                            minHeight: 10,
                           ),
-                          const SizedBox(height: 8),
+                          const SizedBox(height: 12),
                           Align(
                             alignment: Alignment.centerLeft,
                             child: Text(
@@ -362,6 +372,10 @@ class _BudgetPageState extends State<BudgetPage> {
                                   : remaining >= 0
                                   ? 'Reste ${_money(remaining)}'
                                   : 'Dépassement de ${_money(-remaining)}',
+                              style: const TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w500,
+                              ),
                             ),
                           ),
                         ],

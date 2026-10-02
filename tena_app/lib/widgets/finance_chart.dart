@@ -33,6 +33,9 @@ class FinanceChart extends StatelessWidget {
   Widget build(BuildContext context) {
     final maxY = _maxValue();
 
+    final gold = const Color(0xFFD4AF37);
+    final expenseColor = const Color(0xFFC86B6B);
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -42,10 +45,7 @@ class FinanceChart extends StatelessWidget {
             SizedBox(width: 8),
             Text(
               'Revenus et dépenses',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-              ),
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
           ],
         ),
@@ -54,22 +54,16 @@ class FinanceChart extends StatelessWidget {
 
         Row(
           children: [
-            _Legend(
-              color: Colors.green,
-              label: 'Revenus',
-            ),
+            _Legend(color: gold, label: 'Revenus'),
             const SizedBox(width: 20),
-            _Legend(
-              color: Colors.red,
-              label: 'Dépenses',
-            ),
+            _Legend(color: expenseColor, label: 'Dépenses'),
           ],
         ),
 
         const SizedBox(height: 20),
 
         SizedBox(
-          height: 260,
+          height: 195,
           child: LineChart(
             LineChartData(
               minY: 0,
@@ -87,9 +81,7 @@ class FinanceChart extends StatelessWidget {
                 },
               ),
 
-              borderData: FlBorderData(
-                show: false,
-              ),
+              borderData: FlBorderData(show: false),
 
               titlesData: FlTitlesData(
                 topTitles: const AxisTitles(
@@ -147,16 +139,13 @@ class FinanceChart extends StatelessWidget {
                     return spots.map((spot) {
                       final index = spot.x.toInt();
 
-                      final label =
-                          index >= 0 && index < labels.length
-                              ? labels[index]
-                              : '';
+                      final label = index >= 0 && index < labels.length
+                          ? labels[index]
+                          : '';
 
                       return LineTooltipItem(
                         '$label\n${spot.y.toStringAsFixed(2).replaceAll('.', ',')} €',
-                        const TextStyle(
-                          fontWeight: FontWeight.bold,
-                        ),
+                        const TextStyle(fontWeight: FontWeight.bold),
                       );
                     }).toList();
                   },
@@ -169,13 +158,11 @@ class FinanceChart extends StatelessWidget {
                   isCurved: true,
                   curveSmoothness: 0.25,
                   barWidth: 3,
-                  color: Colors.green,
-                  dotData: const FlDotData(
-                    show: true,
-                  ),
+                  color: gold,
+                  dotData: const FlDotData(show: true),
                   belowBarData: BarAreaData(
                     show: true,
-                    color: Colors.green.withValues(alpha: 0.08),
+                    color: gold.withValues(alpha: 0.08),
                   ),
                 ),
 
@@ -184,13 +171,11 @@ class FinanceChart extends StatelessWidget {
                   isCurved: true,
                   curveSmoothness: 0.25,
                   barWidth: 3,
-                  color: Colors.red,
-                  dotData: const FlDotData(
-                    show: true,
-                  ),
+                  color: expenseColor,
+                  dotData: const FlDotData(show: true),
                   belowBarData: BarAreaData(
                     show: true,
-                    color: Colors.red.withValues(alpha: 0.08),
+                    color: expenseColor.withValues(alpha: 0.08),
                   ),
                 ),
               ],
@@ -206,10 +191,7 @@ class _Legend extends StatelessWidget {
   final Color color;
   final String label;
 
-  const _Legend({
-    required this.color,
-    required this.label,
-  });
+  const _Legend({required this.color, required this.label});
 
   @override
   Widget build(BuildContext context) {
@@ -218,18 +200,10 @@ class _Legend extends StatelessWidget {
         Container(
           width: 12,
           height: 12,
-          decoration: BoxDecoration(
-            color: color,
-            shape: BoxShape.circle,
-          ),
+          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
         ),
         const SizedBox(width: 6),
-        Text(
-          label,
-          style: const TextStyle(
-            fontWeight: FontWeight.w500,
-          ),
-        ),
+        Text(label, style: const TextStyle(fontWeight: FontWeight.w500)),
       ],
     );
   }
