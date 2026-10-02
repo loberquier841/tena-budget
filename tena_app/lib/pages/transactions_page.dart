@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../models/transaction.dart';
 import '../services/database_service.dart';
+import '../services/category_service.dart';
 
 class TransactionsPage extends StatefulWidget {
   const TransactionsPage({super.key});
@@ -58,8 +59,7 @@ class _TransactionsPageState extends State<TransactionsPage> {
         transaction.description,
       ].join(' ').toLowerCase();
 
-      final matchesSearch =
-          _search.isEmpty || text.contains(_search);
+      final matchesSearch = _search.isEmpty || text.contains(_search);
 
       return matchesType && matchesSearch;
     }).toList();
@@ -86,6 +86,8 @@ class _TransactionsPageState extends State<TransactionsPage> {
 
   double get _balance => _income - _expenses;
 
+  int get _transactionCount => _filteredTransactions.length;
+
   String _money(double value) {
     return '${value.toStringAsFixed(2).replaceAll('.', ',')} €';
   }
@@ -105,9 +107,7 @@ class _TransactionsPageState extends State<TransactionsPage> {
   Future<void> _editTransaction(Transaction transaction) async {
     final result = await showDialog<Transaction>(
       context: context,
-      builder: (context) => _TransactionDialog(
-        transaction: transaction,
-      ),
+      builder: (context) => _TransactionDialog(transaction: transaction),
     );
 
     if (result == null) return;
@@ -124,7 +124,7 @@ class _TransactionsPageState extends State<TransactionsPage> {
           title: const Text('Supprimer la transaction ?'),
           content: Text(
             'Cette action supprimera définitivement « '
-            '${transaction.description.isEmpty ? transaction.category : transaction.description} ».'
+            '${transaction.description.isEmpty ? transaction.category : transaction.description} ».',
           ),
           actions: [
             TextButton(
@@ -178,9 +178,7 @@ class _TransactionsPageState extends State<TransactionsPage> {
                         ),
                       ),
                       SizedBox(height: 6),
-                      Text(
-                        'Gère tes revenus et tes dépenses.',
-                      ),
+                      Text('Gère tes revenus et tes dépenses.'),
                     ],
                   ),
                 ),
@@ -245,10 +243,7 @@ class _TransactionsPageState extends State<TransactionsPage> {
                     });
                   },
                   itemBuilder: (context) => const [
-                    PopupMenuItem(
-                      value: null,
-                      child: Text('Toutes'),
-                    ),
+                    PopupMenuItem(value: null, child: Text('Toutes')),
                     PopupMenuItem(
                       value: TransactionType.expense,
                       child: Text('Dépenses'),
@@ -273,9 +268,7 @@ class _TransactionsPageState extends State<TransactionsPage> {
                     });
                   },
                   icon: Icon(
-                    _newestFirst
-                        ? Icons.arrow_downward
-                        : Icons.arrow_upward,
+                    _newestFirst ? Icons.arrow_downward : Icons.arrow_upward,
                   ),
                 ),
               ],
@@ -285,91 +278,86 @@ class _TransactionsPageState extends State<TransactionsPage> {
 
             Expanded(
               child: _loading
-                  ? const Center(
-                      child: CircularProgressIndicator(),
-                    )
+                  ? const Center(child: CircularProgressIndicator())
                   : visibleTransactions.isEmpty
-                      ? Center(
-                          child: Text(
-                            _transactions.isEmpty
-                                ? 'Aucune transaction pour le moment.'
-                                : 'Aucune transaction ne correspond aux filtres.',
-                          ),
-                        )
-                      : ListView.separated(
-                          itemCount: visibleTransactions.length,
-                          separatorBuilder: (_, __) =>
-                              const SizedBox(height: 8),
-                          itemBuilder: (context, index) {
-                            final transaction =
-                                visibleTransactions[index];
+                  ? Center(
+                      child: Text(
+                        _transactions.isEmpty
+                            ? 'Aucune transaction pour le moment.'
+                            : 'Aucune transaction ne correspond aux filtres.',
+                      ),
+                    )
+                  : ListView.separated(
+                      itemCount: visibleTransactions.length,
+                      separatorBuilder: (_, __) => const SizedBox(height: 8),
+                      itemBuilder: (context, index) {
+                        final transaction = visibleTransactions[index];
 
-                            final isIncome =
-                                transaction.type ==
-                                    TransactionType.income;
+                        final isIncome =
+                            transaction.type == TransactionType.income;
 
-                            return Card(
-                              child: ListTile(
-                                leading: CircleAvatar(
-                                  child: Icon(
-                                    isIncome
-                                        ? Icons.arrow_downward
-                                        : Icons.arrow_upward,
+                        return Card(
+                          child: ListTile(
+                            leading: CircleAvatar(
+                              child: Icon(
+                                isIncome
+                                    ? Icons.arrow_downward
+                                    : Icons.arrow_upward,
+                              ),
+                            ),
+                            title: Text(
+                              transaction.description.isEmpty
+                                  ? transaction.category
+                                  : transaction.description,
+                            ),
+                            subtitle: Text(
+                              '${transaction.category} • ${_date(transaction)}',
+                            ),
+                            trailing: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  '${isIncome ? '+' : '-'}'
+                                  '${_money(transaction.amount)}',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    color: isIncome
+                                        ? Colors.greenAccent
+                                        : Colors.redAccent,
                                   ),
                                 ),
-                                title: Text(
-                                  transaction.description.isEmpty
-                                      ? transaction.category
-                                      : transaction.description,
-                                ),
-                                subtitle: Text(
-                                  '${transaction.category} • ${_date(transaction)}',
-                                ),
-                                trailing: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Text(
-                                      '${isIncome ? '+' : '-'}'
-                                      '${_money(transaction.amount)}',
-                                      style: TextStyle(
-                                        fontWeight: FontWeight.bold,
-                                        color: isIncome
-                                            ? Colors.greenAccent
-                                            : Colors.redAccent,
+                                const SizedBox(width: 8),
+                                PopupMenuButton<String>(
+                                  onSelected: (value) {
+                                    if (value == 'edit') {
+                                      _editTransaction(transaction);
+                                    } else if (value == 'delete') {
+                                      _deleteTransaction(transaction);
+                                    }
+                                  },
+                                  itemBuilder: (context) => const [
+                                    PopupMenuItem(
+                                      value: 'edit',
+                                      child: ListTile(
+                                        leading: Icon(Icons.edit),
+                                        title: Text('Modifier'),
                                       ),
                                     ),
-                                    const SizedBox(width: 8),
-                                    PopupMenuButton<String>(
-                                      onSelected: (value) {
-                                        if (value == 'edit') {
-                                          _editTransaction(transaction);
-                                        } else if (value == 'delete') {
-                                          _deleteTransaction(transaction);
-                                        }
-                                      },
-                                      itemBuilder: (context) => const [
-                                        PopupMenuItem(
-                                          value: 'edit',
-                                          child: ListTile(
-                                            leading: Icon(Icons.edit),
-                                            title: Text('Modifier'),
-                                          ),
-                                        ),
-                                        PopupMenuItem(
-                                          value: 'delete',
-                                          child: ListTile(
-                                            leading: Icon(Icons.delete_outline),
-                                            title: Text('Supprimer'),
-                                          ),
-                                        ),
-                                      ],
+                                    PopupMenuItem(
+                                      value: 'delete',
+                                      child: ListTile(
+                                        leading: Icon(Icons.delete_outline),
+                                        title: Text('Supprimer'),
+                                      ),
                                     ),
                                   ],
                                 ),
-                              ),
-                            );
-                          },
-                        ),
+                              ],
+                            ),
+                          ),
+                        );
+                      },
+                    ),
             ),
           ],
         ),
@@ -399,17 +387,9 @@ class _SummaryCard extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Icon(
-                icon,
-                color: Theme.of(context).colorScheme.primary,
-              ),
+              Icon(icon, color: Theme.of(context).colorScheme.primary),
               const SizedBox(height: 12),
-              Text(
-                title,
-                style: TextStyle(
-                  color: Colors.grey.shade400,
-                ),
-              ),
+              Text(title, style: TextStyle(color: Colors.grey.shade400)),
               const SizedBox(height: 4),
               Text(
                 value,
@@ -429,24 +409,23 @@ class _SummaryCard extends StatelessWidget {
 class _TransactionDialog extends StatefulWidget {
   final Transaction? transaction;
 
-  const _TransactionDialog({
-    this.transaction,
-  });
+  const _TransactionDialog({this.transaction});
 
   @override
-  State<_TransactionDialog> createState() =>
-      _TransactionDialogState();
+  State<_TransactionDialog> createState() => _TransactionDialogState();
 }
 
 class _TransactionDialogState extends State<_TransactionDialog> {
   final _formKey = GlobalKey<FormState>();
 
   late final TextEditingController _amountController;
-  late final TextEditingController _categoryController;
   late final TextEditingController _descriptionController;
 
   late TransactionType _type;
   late DateTime _date;
+
+  List<String> _categories = [];
+  String? _selectedCategory;
 
   bool get _editing => widget.transaction != null;
 
@@ -460,9 +439,7 @@ class _TransactionDialogState extends State<_TransactionDialog> {
       text: transaction?.amount.toString().replaceAll('.', ',') ?? '',
     );
 
-    _categoryController = TextEditingController(
-      text: transaction?.category ?? '',
-    );
+    _selectedCategory = transaction?.category;
 
     _descriptionController = TextEditingController(
       text: transaction?.description ?? '',
@@ -470,12 +447,32 @@ class _TransactionDialogState extends State<_TransactionDialog> {
 
     _type = transaction?.type ?? TransactionType.expense;
     _date = transaction?.date ?? DateTime.now();
+
+    _loadCategories();
+  }
+
+  Future<void> _loadCategories() async {
+    final categories = await CategoryService.getCategories();
+
+    if (!mounted) return;
+
+    setState(() {
+      _categories = categories;
+
+      if (_selectedCategory != null &&
+          !_categories.contains(_selectedCategory)) {
+        _categories = [_selectedCategory!, ..._categories];
+      }
+
+      if (_selectedCategory == null && _categories.isNotEmpty) {
+        _selectedCategory = _categories.first;
+      }
+    });
   }
 
   @override
   void dispose() {
     _amountController.dispose();
-    _categoryController.dispose();
     _descriptionController.dispose();
     super.dispose();
   }
@@ -504,14 +501,14 @@ class _TransactionDialogState extends State<_TransactionDialog> {
   void _save() {
     if (!_formKey.currentState!.validate()) return;
 
-    final amount =
-        double.parse(_amountController.text.replaceAll(',', '.'));
+    final amount = double.parse(_amountController.text.replaceAll(',', '.'));
 
     final transaction = Transaction(
-      id: widget.transaction?.id ??
+      id:
+          widget.transaction?.id ??
           DateTime.now().microsecondsSinceEpoch.toString(),
       amount: amount,
-      category: _categoryController.text.trim(),
+      category: _selectedCategory ?? '',
       description: _descriptionController.text.trim(),
       date: _date,
       type: _type,
@@ -557,8 +554,7 @@ class _TransactionDialogState extends State<_TransactionDialog> {
 
               TextFormField(
                 controller: _amountController,
-                keyboardType:
-                    const TextInputType.numberWithOptions(
+                keyboardType: const TextInputType.numberWithOptions(
                   decimal: true,
                 ),
                 decoration: const InputDecoration(
@@ -581,16 +577,28 @@ class _TransactionDialogState extends State<_TransactionDialog> {
 
               const SizedBox(height: 12),
 
-              TextFormField(
-                controller: _categoryController,
+              DropdownButtonFormField<String>(
+                value: _selectedCategory,
                 decoration: const InputDecoration(
                   labelText: 'Catégorie',
-                  hintText: 'Ex. Alimentation',
                   border: OutlineInputBorder(),
                 ),
+                items: _categories
+                    .map(
+                      (category) => DropdownMenuItem<String>(
+                        value: category,
+                        child: Text(category),
+                      ),
+                    )
+                    .toList(),
+                onChanged: (value) {
+                  setState(() {
+                    _selectedCategory = value;
+                  });
+                },
                 validator: (value) {
                   if (value == null || value.trim().isEmpty) {
-                    return 'Entre une catégorie.';
+                    return 'Choisis une catégorie.';
                   }
 
                   return null;
@@ -633,9 +641,7 @@ class _TransactionDialogState extends State<_TransactionDialog> {
         ),
         FilledButton(
           onPressed: _save,
-          child: Text(
-            _editing ? 'Enregistrer' : 'Ajouter',
-          ),
+          child: Text(_editing ? 'Enregistrer' : 'Ajouter'),
         ),
       ],
     );

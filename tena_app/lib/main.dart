@@ -1,8 +1,15 @@
 import 'package:flutter/material.dart';
+
 import 'pages/transactions_page.dart';
+import 'pages/categories_page.dart';
+import 'pages/budget_page.dart';
+import 'pages/goals_page.dart';
+import 'pages/forecast_page.dart';
 import 'models/finance_summary.dart';
 import 'widgets/finance_chart.dart';
+
 import 'package:fl_chart/fl_chart.dart';
+
 import 'models/transaction.dart';
 import 'services/finance_service.dart';
 
@@ -43,6 +50,7 @@ class _TenaHomeState extends State<TenaHome> {
     _Page(title: 'Accueil', icon: Icons.home_outlined),
     _Page(title: 'Budget', icon: Icons.account_balance_wallet_outlined),
     _Page(title: 'Transactions', icon: Icons.swap_vert),
+    _Page(title: 'Catégories', icon: Icons.category_outlined),
     _Page(title: 'Objectifs', icon: Icons.track_changes_outlined),
     _Page(title: 'Prévisions', icon: Icons.insights_outlined),
     _Page(title: 'IA TENΛ', icon: Icons.auto_awesome),
@@ -64,16 +72,9 @@ class _TenaHomeState extends State<TenaHome> {
       appBar: AppBar(
         title: Row(
           children: [
-            Image.asset(
-              'assets/tena_icon.png',
-              width: 32,
-              height: 32,
-            ),
+            Image.asset('assets/tena_icon.png', width: 32, height: 32),
             const SizedBox(width: 10),
-            const Text(
-              'TENΛ',
-              style: TextStyle(fontWeight: FontWeight.bold),
-            ),
+            const Text('TENΛ', style: TextStyle(fontWeight: FontWeight.bold)),
             const SizedBox(width: 8),
             Text(
               'Budget',
@@ -92,10 +93,7 @@ class _TenaHomeState extends State<TenaHome> {
           ),
           const Padding(
             padding: EdgeInsets.only(right: 16),
-            child: CircleAvatar(
-              radius: 17,
-              child: Text('C'),
-            ),
+            child: CircleAvatar(radius: 17, child: Text('C')),
           ),
         ],
       ),
@@ -108,11 +106,7 @@ class _TenaHomeState extends State<TenaHome> {
                 padding: const EdgeInsets.fromLTRB(20, 10, 20, 20),
                 child: Row(
                   children: [
-                    Image.asset(
-                      'assets/tena_icon.png',
-                      width: 42,
-                      height: 42,
-                    ),
+                    Image.asset('assets/tena_icon.png', width: 42, height: 42),
                     const SizedBox(width: 12),
                     const Text(
                       'TENΛ Budget',
@@ -147,8 +141,22 @@ class _TenaHomeState extends State<TenaHome> {
       return const DashboardPage();
     }
 
+    if (selectedIndex == 1) {
+      return BudgetPage(month: DateTime.now());
+    }
+
     if (selectedIndex == 2) {
       return const TransactionsPage();
+    }
+
+    if (selectedIndex == 3) {
+      return const CategoriesPage();
+    }
+    if (selectedIndex == 4) {
+      return const GoalsPage();
+    }
+    if (selectedIndex == 5) {
+      return const ForecastPage();
     }
 
     return Center(
@@ -165,18 +173,12 @@ class _TenaHomeState extends State<TenaHome> {
             const SizedBox(height: 20),
             Text(
               page.title,
-              style: const TextStyle(
-                fontSize: 32,
-                fontWeight: FontWeight.bold,
-              ),
+              style: const TextStyle(fontSize: 32, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 12),
             Text(
               'Module TENΛ Budget',
-              style: TextStyle(
-                color: Colors.grey.shade400,
-                fontSize: 16,
-              ),
+              style: TextStyle(color: Colors.grey.shade400, fontSize: 16),
             ),
           ],
         ),
@@ -195,10 +197,7 @@ class DashboardPage extends StatefulWidget {
 class _DashboardPageState extends State<DashboardPage> {
   late Future<FinanceSummary> _summaryFuture;
 
-  DateTime _selectedMonth = DateTime(
-    DateTime.now().year,
-    DateTime.now().month,
-  );
+  DateTime _selectedMonth = DateTime(DateTime.now().year, DateTime.now().month);
 
   @override
   void initState() {
@@ -254,12 +253,7 @@ class _DashboardPageState extends State<DashboardPage> {
       final transaction = transactions[i];
 
       if (transaction.type == type) {
-        spots.add(
-          FlSpot(
-            i.toDouble(),
-            transaction.amount,
-          ),
-        );
+        spots.add(FlSpot(i.toDouble(), transaction.amount));
       }
     }
 
@@ -272,9 +266,7 @@ class _DashboardPageState extends State<DashboardPage> {
       future: _summaryFuture,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(
-            child: CircularProgressIndicator(),
-          );
+          return const Center(child: CircularProgressIndicator());
         }
 
         if (snapshot.hasError) {
@@ -299,18 +291,12 @@ class _DashboardPageState extends State<DashboardPage> {
             children: [
               const Text(
                 'Bonjour 👋',
-                style: TextStyle(
-                  fontSize: 32,
-                  fontWeight: FontWeight.bold,
-                ),
+                style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 6),
               Text(
                 'Voici la situation de ton budget.',
-                style: TextStyle(
-                  color: Colors.grey.shade400,
-                  fontSize: 16,
-                ),
+                style: TextStyle(color: Colors.grey.shade400, fontSize: 16),
               ),
 
               const SizedBox(height: 24),
@@ -394,10 +380,7 @@ class _DashboardPageState extends State<DashboardPage> {
               if (summary.recentTransactions.isNotEmpty) ...[
                 const Text(
                   'Évolution financière',
-                  style: TextStyle(
-                    fontSize: 22,
-                    fontWeight: FontWeight.bold,
-                  ),
+                  style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(height: 12),
                 Card(
@@ -442,9 +425,7 @@ class _DashboardPageState extends State<DashboardPage> {
                               ),
                             ),
                             SizedBox(height: 5),
-                            Text(
-                              'L’assistant financier sera disponible ici.',
-                            ),
+                            Text('L’assistant financier sera disponible ici.'),
                           ],
                         ),
                       ),
@@ -472,9 +453,7 @@ class _DashboardPageState extends State<DashboardPage> {
                     child: Center(
                       child: Text(
                         'Aucune transaction pour ce mois.',
-                        style: TextStyle(
-                          color: Colors.grey.shade400,
-                        ),
+                        style: TextStyle(color: Colors.grey.shade400),
                       ),
                     ),
                   ),
@@ -488,9 +467,7 @@ class _DashboardPageState extends State<DashboardPage> {
 
                       return ListTile(
                         leading: Icon(
-                          isIncome
-                              ? Icons.arrow_downward
-                              : Icons.arrow_upward,
+                          isIncome ? Icons.arrow_downward : Icons.arrow_upward,
                         ),
                         title: Text(
                           transaction.description.isEmpty
@@ -500,9 +477,7 @@ class _DashboardPageState extends State<DashboardPage> {
                         subtitle: Text(transaction.category),
                         trailing: Text(
                           '${isIncome ? '+' : '-'}${_money(transaction.amount)}',
-                          style: const TextStyle(
-                            fontWeight: FontWeight.bold,
-                          ),
+                          style: const TextStyle(fontWeight: FontWeight.bold),
                         ),
                       );
                     }).toList(),
@@ -543,10 +518,7 @@ class _StatCard extends StatelessWidget {
                 color: Theme.of(context).colorScheme.primary,
               ),
               const SizedBox(height: 18),
-              Text(
-                title,
-                style: TextStyle(color: Colors.grey.shade400),
-              ),
+              Text(title, style: TextStyle(color: Colors.grey.shade400)),
               const SizedBox(height: 6),
               Text(
                 value,
@@ -567,8 +539,5 @@ class _Page {
   final String title;
   final IconData icon;
 
-  const _Page({
-    required this.title,
-    required this.icon,
-  });
+  const _Page({required this.title, required this.icon});
 }
