@@ -1,0 +1,369 @@
+import 'package:flutter/material.dart';
+import 'pages/transactions_page.dart';
+import 'services/finance_service.dart';
+
+void main() {
+  runApp(const TenaBudgetApp());
+}
+
+class TenaBudgetApp extends StatelessWidget {
+  const TenaBudgetApp({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      title: 'TENΛ Budget',
+      debugShowCheckedModeBanner: false,
+      theme: ThemeData(
+        brightness: Brightness.dark,
+        useMaterial3: true,
+        colorSchemeSeed: const Color(0xFF7C4DFF),
+        scaffoldBackgroundColor: const Color(0xFF0D0D12),
+      ),
+      home: const TenaHome(),
+    );
+  }
+}
+
+class TenaHome extends StatefulWidget {
+  const TenaHome({super.key});
+
+  @override
+  State<TenaHome> createState() => _TenaHomeState();
+}
+
+class _TenaHomeState extends State<TenaHome> {
+  int selectedIndex = 0;
+
+  final pages = const [
+    _Page(title: 'Accueil', icon: Icons.home_outlined),
+    _Page(title: 'Budget', icon: Icons.account_balance_wallet_outlined),
+    _Page(title: 'Transactions', icon: Icons.swap_vert),
+    _Page(title: 'Objectifs', icon: Icons.track_changes_outlined),
+    _Page(title: 'Prévisions', icon: Icons.insights_outlined),
+    _Page(title: 'IA TENΛ', icon: Icons.auto_awesome),
+    _Page(title: 'Rapports', icon: Icons.assessment_outlined),
+    _Page(title: 'Documents', icon: Icons.folder_outlined),
+    _Page(title: 'Notifications', icon: Icons.notifications_none),
+    _Page(title: 'Comparateur', icon: Icons.compare_arrows),
+    _Page(title: 'Famille', icon: Icons.family_restroom),
+    _Page(title: 'Entreprise', icon: Icons.business_outlined),
+    _Page(title: 'Autopilot', icon: Icons.bolt_outlined),
+    _Page(title: 'Paramètres', icon: Icons.settings_outlined),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    final current = pages[selectedIndex];
+
+    return Scaffold(
+      appBar: AppBar(
+        title: Row(
+          children: [
+            Image.asset(
+              'assets/tena_icon.png',
+              width: 32,
+              height: 32,
+            ),
+            const SizedBox(width: 10),
+            const Text(
+              'TENΛ',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(width: 8),
+            Text(
+              'Budget',
+              style: TextStyle(
+                color: Colors.grey.shade400,
+                fontWeight: FontWeight.normal,
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          IconButton(
+            tooltip: 'Notifications',
+            onPressed: () => setState(() => selectedIndex = 8),
+            icon: const Icon(Icons.notifications_none),
+          ),
+          const Padding(
+            padding: EdgeInsets.only(right: 16),
+            child: CircleAvatar(
+              radius: 17,
+              child: Text('C'),
+            ),
+          ),
+        ],
+      ),
+
+      // Navigation desktop/tablette
+      drawer: Drawer(
+        child: SafeArea(
+          child: ListView(
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 10, 20, 20),
+                child: Row(
+                  children: [
+                    Image.asset(
+                      'assets/tena_icon.png',
+                      width: 42,
+                      height: 42,
+                    ),
+                    const SizedBox(width: 12),
+                    const Text(
+                      'TENΛ Budget',
+                      style: TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              for (int i = 0; i < pages.length; i++)
+                ListTile(
+                  leading: Icon(pages[i].icon),
+                  title: Text(pages[i].title),
+                  selected: selectedIndex == i,
+                  onTap: () {
+                    setState(() => selectedIndex = i);
+                    Navigator.pop(context);
+                  },
+                ),
+            ],
+          ),
+        ),
+      ),
+
+      body: _buildPage(current),
+    );
+  }
+
+  Widget _buildPage(_Page page) {
+    if (selectedIndex == 0) {
+      return const DashboardPage();
+    }
+
+    if (selectedIndex == 2) {
+      return const TransactionsPage();
+    }
+
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              page.icon,
+              size: 64,
+              color: Theme.of(context).colorScheme.primary,
+            ),
+            const SizedBox(height: 20),
+            Text(
+              page.title,
+              style: const TextStyle(
+                fontSize: 32,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'Module TENΛ Budget',
+              style: TextStyle(
+                color: Colors.grey.shade400,
+                fontSize: 16,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class DashboardPage extends StatefulWidget {
+  const DashboardPage({super.key});
+
+  @override
+  State<DashboardPage> createState() => _DashboardPageState();
+}
+
+class _DashboardPageState extends State<DashboardPage> {
+  @override
+  Widget build(BuildContext context) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Bonjour 👋',
+            style: TextStyle(
+              fontSize: 32,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'Voici la situation de ton budget.',
+            style: TextStyle(
+              color: Colors.grey.shade400,
+              fontSize: 16,
+            ),
+          ),
+
+          const SizedBox(height: 28),
+
+          Wrap(
+            spacing: 16,
+            runSpacing: 16,
+            children: const [
+              _StatCard(
+                title: 'Solde',
+                value: '0,00 €',
+                icon: Icons.account_balance_wallet_outlined,
+              ),
+              _StatCard(
+                title: 'Dépenses',
+                value: '0,00 €',
+                icon: Icons.arrow_upward,
+              ),
+              _StatCard(
+                title: 'Épargne',
+                value: '0,00 €',
+                icon: Icons.savings_outlined,
+              ),
+              _StatCard(
+                title: 'Objectifs',
+                value: '0',
+                icon: Icons.track_changes_outlined,
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 28),
+
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(22),
+              child: Row(
+                children: [
+                  Image.asset(
+                    'assets/tena_icon.png',
+                    width: 42,
+                    height: 42,
+                  ),
+                  const SizedBox(width: 16),
+                  const Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'TENΛ IA',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        SizedBox(height: 5),
+                        Text(
+                          'L’assistant financier sera disponible ici.',
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+          const SizedBox(height: 24),
+
+          const Text(
+            'Activité récente',
+            style: TextStyle(
+              fontSize: 22,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+
+          const SizedBox(height: 12),
+
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Center(
+                child: Text(
+                  'Aucune transaction pour le moment.',
+                  style: TextStyle(
+                    color: Colors.grey.shade400,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _StatCard extends StatelessWidget {
+  final String title;
+  final String value;
+  final IconData icon;
+
+  const _StatCard({
+    required this.title,
+    required this.value,
+    required this.icon,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 220,
+      child: Card(
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(
+                icon,
+                size: 28,
+                color: Theme.of(context).colorScheme.primary,
+              ),
+              const SizedBox(height: 18),
+              Text(
+                title,
+                style: TextStyle(color: Colors.grey.shade400),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                value,
+                style: const TextStyle(
+                  fontSize: 25,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _Page {
+  final String title;
+  final IconData icon;
+
+  const _Page({
+    required this.title,
+    required this.icon,
+  });
+}
