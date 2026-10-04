@@ -2,6 +2,175 @@ import 'package:flutter/material.dart';
 
 import '../theme/tena_theme.dart';
 
+/// Barre de progression de budget, avec code couleur sémantique.
+///
+/// Remplace les `LinearProgressIndicator` bruts qui restaient dans la couleur
+/// par défaut du thème. Points résolus ici :
+/// - la couleur suit le niveau de consommation (normal, vigilance, dépassé) ;
+/// - le dépassement est visible sans calcul mental, la barre étant saturée à
+///   100 % mais accompagnée d'un pourcentage explicite au-delà ;
+/// - la valeur est annoncée aux lecteurs d'écran, la barre seule n'étant pas
+///   une information exploitable ;
+/// - l'épaisseur et l'arrondi sont identiques sur toutes les pages.
+class TenaProgressBar extends StatelessWidget {
+  /// Valeur atteinte, dans n'importe quelle unité.
+  final double value;
+
+  /// Valeur maximale de référence (budget, objectif...).
+  final double total;
+
+  final double height;
+
+  const TenaProgressBar({
+    super.key,
+    required this.value,
+    required this.total,
+    this.height = 10,
+  });
+
+  /// Consommation en pourcentage. Vaut zéro quand aucune limite n'est définie.
+  double get _ratio {
+    if (total <= 0) return 0;
+    return value / total;
+  }
+
+  Color get _color {
+    if (total <= 0) return TenaColors.textTertiary;
+
+    if (_ratio >= 1) return TenaColors.danger;
+
+    if (_ratio >= 0.9) return const Color(0xFFFBBF24);
+
+    return TenaColors.gold;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // Sans budget, une barre vide ne transmet aucune information : on
+    // n'affiche la piste que lorsqu'il existe une référence.
+    if (total <= 0) {
+      return const SizedBox.shrink();
+    }
+
+    final ratio = _ratio;
+    final percent = (ratio * 100).round();
+
+    final overflow = ratio > 1;
+
+    return Semantics(
+      label: 'Consommation',
+      value: '$percent pour cent',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          ClipRRect(
+            borderRadius: BorderRadius.circular(height),
+            child: LinearProgressIndicator(
+              value: ratio.clamp(0.0, 1.0),
+              minHeight: height,
+              backgroundColor: TenaColors.surfaceRaised,
+              valueColor: AlwaysStoppedAnimation<Color>(_color),
+            ),
+          ),
+          // Le pourcentage n'apparaît que lorsqu'il y a dépassement : sinon
+          // il ferait doublon avec le montant affiché à côté et alourdirait
+          // chaque ligne.
+          if (overflow) ...[
+            const SizedBox(height: TenaSpacing.xs),
+            Text(
+              'Budget dépassé de ${(ratio * 100 - 100).round()} %',
+              style: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                color: TenaColors.danger,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+/// Ligne de couple « dépensé / budget ».
+///
+/// Centralisée pour que le libellé reste identique partout : la version
+/// précédente répétait la mise en forme dans chaque page.
+class TenaAmountRow extends StatelessWidget {
+  final String label;
+  final String value;
+
+  /// Suffixe affiché après la valeur (`/ 1 500,00 €`).
+  final String? suffix;
+
+  final Color? valueColor;
+  final bool emphasize;
+
+  const TenaAmountRow({
+    super.key,
+    required this.label,
+    required this.value,
+    this.suffix,
+    this.valueColor,
+    this.emphasize = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [
+        Expanded(
+          child: Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: emphasize ? 14 : 13,
+              fontWeight: FontWeight.w600,
+              color: TenaColors.textSecondary,
+            ),
+          ),
+        ),
+        const SizedBox(width: TenaSpacing.sm),
+        // `FittedBox` évite le débordement quand le budget est élevé.
+        Flexible(
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerRight,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.baseline,
+              textBaseline: TextBaseline.alphabetic,
+              children: [
+                Text(
+                  value,
+                  style: TextStyle(
+                    fontSize: emphasize ? 24 : 15,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: -0.3,
+                    color: valueColor ?? TenaColors.textPrimary,
+                  ),
+                ),
+                if (suffix != null) ...[
+                  const SizedBox(width: TenaSpacing.xs),
+                  Text(
+                    suffix!,
+                    style: const TextStyle(
+                      fontSize: 13,
+                      color: TenaColors.textTertiary,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 /// Carte de base de l'application.
 ///
 /// Remplace les `Card(elevation: 0)` dispersés : bordure, fond, arrondi et

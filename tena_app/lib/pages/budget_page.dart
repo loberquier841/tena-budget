@@ -4,6 +4,8 @@ import '../models/transaction.dart';
 import '../services/budget_service.dart';
 import '../services/category_service.dart';
 import '../services/database_service.dart';
+import '../theme/tena_theme.dart';
+import '../widgets/tena_card.dart';
 
 class BudgetPage extends StatefulWidget {
   final DateTime month;
@@ -87,10 +89,6 @@ class _BudgetPageState extends State<BudgetPage> {
     return _monthExpenses
         .where((transaction) => transaction.category == category)
         .fold(0, (sum, transaction) => sum + transaction.amount);
-  }
-
-  String _money(double value) {
-    return '${value.toStringAsFixed(2).replaceAll('.', ',')} €';
   }
 
   String _monthName() {
@@ -223,177 +221,252 @@ class _BudgetPageState extends State<BudgetPage> {
     }
 
     final globalRemaining = _globalBudget - _totalExpenses;
-    final globalProgress = _globalBudget <= 0
-        ? 0.0
-        : (_totalExpenses / _globalBudget).clamp(0.0, 1.0);
 
     return Scaffold(
       body: RefreshIndicator(
         onRefresh: _load,
         child: ListView(
-          padding: const EdgeInsets.all(24),
+          padding: const EdgeInsets.all(TenaSpacing.lg),
+          children: [
+            // En-tête repliable sur téléphone : le titre et le bouton côte à
+            // côte débordaient sous 420 px de large.
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final compact = constraints.maxWidth < 420;
+
+                final title = Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('Budget', style: TenaLabels.title),
+                    const SizedBox(height: TenaSpacing.xs),
+                    Text(
+                      '${_monthName()} — contrôle ton budget mensuel.',
+                      style: TenaLabels.subtitle,
+                    ),
+                  ],
+                );
+
+                final action = OutlinedButton.icon(
+                  onPressed: _editGlobalBudget,
+                  icon: const Icon(Icons.tune_rounded, size: 18),
+                  label: const Text('Budget global'),
+                );
+
+                if (compact) {
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      title,
+                      const SizedBox(height: TenaSpacing.md),
+                      action,
+                    ],
+                  );
+                }
+
+                return Row(
+                  children: [
+                    Expanded(child: title),
+                    const SizedBox(width: TenaSpacing.lg),
+                    action,
+                  ],
+                );
+              },
+            ),
+
+            const SizedBox(height: TenaSpacing.xl),
+
+            _globalBudgetCard(globalRemaining),
+
+            const SizedBox(height: TenaSpacing.xxl),
+
+            const TenaSectionTitle(
+              title: 'Budgets par catégorie',
+              subtitle: 'Touche une catégorie pour ajuster son plafond.',
+              icon: Icons.category_outlined,
+            ),
+
+            const SizedBox(height: TenaSpacing.md),
+
+            ..._categories.map(_categoryCard),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Carte récapitulative du budget global.
+  Widget _globalBudgetCard(double remaining) {
+    // Sans budget défini, la carte doit inciter à le créer plutôt que
+    // d'afficher une barre vide qui ne veut rien dire.
+    if (_globalBudget <= 0) {
+      return TenaCard(
+        padding: const EdgeInsets.all(TenaSpacing.xl),
+        child: Row(
+          children: [
+            Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: TenaColors.gold.withValues(alpha: 0.12),
+                borderRadius: TenaRadius.md,
+              ),
+              child: const Icon(
+                Icons.account_balance_wallet_outlined,
+                color: TenaColors.gold,
+              ),
+            ),
+            const SizedBox(width: TenaSpacing.lg),
+            const Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Aucun budget global',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  SizedBox(height: 4),
+                  Text(
+                    'Fixe un plafond mensuel pour suivre ta consommation et '
+                    'recevoir des alertes.',
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: TenaColors.textSecondary,
+                      height: 1.4,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    final overBudget = remaining < 0;
+
+    return TenaCard(
+      highlighted: overBudget,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('BUDGET GLOBAL', style: TenaLabels.overline),
+          const SizedBox(height: TenaSpacing.md),
+          TenaAmountRow(
+            label: 'Dépensé',
+            value: tenaMoney(_totalExpenses),
+            suffix: '/ ${tenaMoney(_globalBudget)}',
+            emphasize: true,
+            valueColor: overBudget
+                ? TenaColors.danger
+                : TenaColors.textPrimary,
+          ),
+          const SizedBox(height: TenaSpacing.lg),
+          TenaProgressBar(
+            value: _totalExpenses,
+            total: _globalBudget,
+            height: 12,
+          ),
+          const SizedBox(height: TenaSpacing.md),
+          Row(
+            children: [
+              Icon(
+                overBudget
+                    ? Icons.warning_amber_rounded
+                    : Icons.check_circle_outline,
+                size: 16,
+                color: overBudget
+                    ? TenaColors.danger
+                    : TenaColors.success,
+              ),
+              const SizedBox(width: TenaSpacing.sm),
+              Expanded(
+                child: Text(
+                  overBudget
+                      ? 'Dépassement de ${tenaMoney(-remaining)}'
+                      : 'Il reste ${tenaMoney(remaining)} pour ce mois',
+                  style: TextStyle(
+                    fontSize: 13.5,
+                    fontWeight: FontWeight.w600,
+                    color: overBudget
+                        ? TenaColors.danger
+                        : TenaColors.success,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Carte d'une catégorie : toute la surface est cliquable pour éditer le
+  /// budget, l'icône d'édition étant difficile à toucher sur petit écran.
+  Widget _categoryCard(String category) {
+    final budget = _categoryBudgets[category] ?? 0;
+    final spent = _categorySpent(category);
+    final remaining = budget - spent;
+    final overBudget = budget > 0 && remaining < 0;
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: TenaSpacing.md),
+      child: TenaCard(
+        highlighted: overBudget,
+        onTap: () => _editCategoryBudget(category),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
               children: [
-                const Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Budget',
-                        style: TextStyle(
-                          fontSize: 32,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      SizedBox(height: 6),
-                      Text('Contrôle ton budget mensuel.'),
-                    ],
+                Expanded(
+                  child: Text(
+                    category,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                 ),
-                OutlinedButton.icon(
-                  onPressed: _editGlobalBudget,
-                  icon: const Icon(Icons.edit_outlined),
-                  label: const Text('Budget global'),
+                const SizedBox(width: TenaSpacing.sm),
+                const Icon(
+                  Icons.chevron_right_rounded,
+                  size: 20,
+                  color: TenaColors.textTertiary,
                 ),
               ],
             ),
-
-            const SizedBox(height: 8),
-
-            Text(_monthName(), style: Theme.of(context).textTheme.titleMedium),
-
-            const SizedBox(height: 20),
-
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(20),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Budget global',
-                      style: TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(
-                          _money(_totalExpenses),
-                          style: const TextStyle(
-                            fontSize: 32,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        Text(
-                          _globalBudget > 0
-                              ? '/ ${_money(_globalBudget)}'
-                              : 'Aucun budget défini',
-                          style: const TextStyle(
-                            fontSize: 20,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 16),
-                    LinearProgressIndicator(
-                      value: globalProgress,
-                      minHeight: 12,
-                    ),
-                    const SizedBox(height: 16),
-                    Text(
-                      _globalBudget > 0
-                          ? globalRemaining >= 0
-                                ? 'Il reste ${_money(globalRemaining)}'
-                                : 'Dépassement de ${_money(-globalRemaining)}'
-                          : 'Définis un budget global pour suivre ton mois.',
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ],
-                ),
+            const SizedBox(height: TenaSpacing.md),
+            TenaAmountRow(
+              label: 'Dépensé',
+              value: tenaMoney(spent),
+              suffix: budget > 0 ? '/ ${tenaMoney(budget)}' : null,
+            ),
+            const SizedBox(height: TenaSpacing.md),
+            if (budget > 0) ...[
+              TenaProgressBar(value: spent, total: budget),
+              const SizedBox(height: TenaSpacing.md),
+            ],
+            Text(
+              budget <= 0
+                  ? 'Aucun budget — touche pour en définir un'
+                  : remaining >= 0
+                  ? 'Il reste ${tenaMoney(remaining)}'
+                  : 'Dépassement de ${tenaMoney(-remaining)}',
+              style: TextStyle(
+                fontSize: 12.5,
+                fontWeight: FontWeight.w500,
+                color: budget <= 0
+                    ? TenaColors.textTertiary
+                    : overBudget
+                    ? TenaColors.danger
+                    : TenaColors.textSecondary,
               ),
             ),
-
-            const SizedBox(height: 24),
-
-            const Text(
-              'Budgets par catégorie',
-              style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
-            ),
-
-            const SizedBox(height: 12),
-
-            ..._categories.map((category) {
-              final budget = _categoryBudgets[category] ?? 0;
-              final spent = _categorySpent(category);
-              final remaining = budget - spent;
-              final progress = budget <= 0
-                  ? 0.0
-                  : (spent / budget).clamp(0.0, 1.0);
-
-              return Card(
-                margin: const EdgeInsets.only(bottom: 12),
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    children: [
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              category,
-                              style: const TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ),
-                          Text(
-                            budget > 0
-                                ? '${_money(spent)} / ${_money(budget)}'
-                                : _money(spent),
-                            style: const TextStyle(
-                              fontSize: 16,
-                            ),
-                          ),
-                          IconButton(
-                            onPressed: () => _editCategoryBudget(category),
-                            icon: const Icon(Icons.edit_outlined),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 12),
-                      LinearProgressIndicator(
-                        value: progress,
-                        minHeight: 10,
-                      ),
-                      const SizedBox(height: 12),
-                      Align(
-                        alignment: Alignment.centerLeft,
-                        child: Text(
-                          budget <= 0
-                              ? 'Aucun budget défini'
-                              : remaining >= 0
-                              ? 'Reste ${_money(remaining)}'
-                              : 'Dépassement de ${_money(-remaining)}',
-                          style: const TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              );
-            }),
           ],
         ),
       ),

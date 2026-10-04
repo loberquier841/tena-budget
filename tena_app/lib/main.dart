@@ -13,12 +13,17 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'models/transaction.dart';
 import 'services/crypto_service.dart';
+import 'services/budget_service.dart';
 import 'services/finance_service.dart';
+import 'services/goal_service.dart';
+import 'services/notification_service.dart';
 import 'services/secure_key_store.dart';
 import 'state/period_state.dart';
 import 'theme/tena_app_theme.dart';
 import 'theme/tena_theme.dart';
 import 'widgets/tena_card.dart';
+import 'widgets/tena_future_section.dart';
+import 'widgets/tena_sidebar.dart';
 
 Future<void> main() async {
   // La clé maîtresse doit être résolue avant le premier accès à la base : la
@@ -65,22 +70,57 @@ class _TenaHomeState extends State<TenaHome> {
   /// créé mais jamais utilisé).
   final PeriodState _period = PeriodState();
 
+  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
+
+  /// Seuil au-delà duquel la navigation devient une colonne permanente.
+  ///
+  /// 1080 px permet au contenu de conserver une largeur de lecture confortable
+  /// même avec la barre latérale visible.
+  static const double _wideBreakpoint = 1080;
+
   final pages = const [
-    _Page(title: 'Accueil', icon: Icons.home_outlined),
-    _Page(title: 'Budget', icon: Icons.account_balance_wallet_outlined),
-    _Page(title: 'Transactions', icon: Icons.swap_vert),
-    _Page(title: 'Catégories', icon: Icons.category_outlined),
-    _Page(title: 'Objectifs', icon: Icons.track_changes_outlined),
-    _Page(title: 'Prévisions', icon: Icons.insights_outlined),
-    _Page(title: 'IA TENΛ', icon: Icons.auto_awesome),
-    _Page(title: 'Rapports', icon: Icons.assessment_outlined),
-    _Page(title: 'Documents', icon: Icons.folder_outlined),
-    _Page(title: 'Notifications', icon: Icons.notifications_none),
-    _Page(title: 'Comparateur', icon: Icons.compare_arrows),
-    _Page(title: 'Famille', icon: Icons.family_restroom),
-    _Page(title: 'Entreprise', icon: Icons.business_outlined),
-    _Page(title: 'Autopilot', icon: Icons.bolt_outlined),
-    _Page(title: 'Paramètres', icon: Icons.settings_outlined),
+    TenaNavItem(
+      title: 'Accueil',
+      icon: Icons.dashboard_outlined,
+      activeIcon: Icons.dashboard_rounded,
+    ),
+    TenaNavItem(
+      title: 'Budget',
+      icon: Icons.account_balance_wallet_outlined,
+      activeIcon: Icons.account_balance_wallet_rounded,
+    ),
+    TenaNavItem(
+      title: 'Transactions',
+      icon: Icons.swap_vert_rounded,
+    ),
+    TenaNavItem(
+      title: 'Catégories',
+      icon: Icons.category_outlined,
+      activeIcon: Icons.category_rounded,
+    ),
+    TenaNavItem(
+      title: 'Objectifs',
+      icon: Icons.track_changes_outlined,
+      activeIcon: Icons.track_changes_rounded,
+    ),
+    TenaNavItem(
+      title: 'Prévisions',
+      icon: Icons.insights_outlined,
+      activeIcon: Icons.insights_rounded,
+    ),
+    TenaNavItem(
+      title: 'IA TENΛ',
+      icon: Icons.auto_awesome_outlined,
+      activeIcon: Icons.auto_awesome,
+    ),
+    TenaNavItem(title: 'Rapports', icon: Icons.assessment_outlined),
+    TenaNavItem(title: 'Documents', icon: Icons.folder_outlined),
+    TenaNavItem(title: 'Notifications', icon: Icons.notifications_none),
+    TenaNavItem(title: 'Comparateur', icon: Icons.compare_arrows_rounded),
+    TenaNavItem(title: 'Famille', icon: Icons.family_restroom_rounded),
+    TenaNavItem(title: 'Entreprise', icon: Icons.business_outlined),
+    TenaNavItem(title: 'Autopilot', icon: Icons.bolt_rounded),
+    TenaNavItem(title: 'Paramètres', icon: Icons.settings_outlined),
   ];
 
   @override
@@ -99,81 +139,85 @@ class _TenaHomeState extends State<TenaHome> {
     setState(() => selectedIndex = index);
   }
 
+  /// Sélectionne un module et referme le tiroir s'il est ouvert.
+  void _selectPage(int index) {
+    _goToPage(index);
+
+    final scaffold = _scaffoldKey.currentState;
+
+    if (scaffold != null && scaffold.isDrawerOpen) {
+      Navigator.of(context).pop();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final current = pages[selectedIndex];
 
-    return Scaffold(
-      appBar: AppBar(
-        title: Row(
-          children: [
-            Image.asset('assets/tena_icon.png', width: 32, height: 32),
-            const SizedBox(width: 10),
-            const Text('TENΛ', style: TextStyle(fontWeight: FontWeight.bold)),
-            const SizedBox(width: 8),
-            Text(
-              'Budget',
-              style: TextStyle(
-                color: Colors.grey.shade400,
-                fontWeight: FontWeight.normal,
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          IconButton(
-            tooltip: 'Notifications',
-            // Index 9 = page « Notifications » de la liste `pages`
-            // (l'index 8 correspond à « Documents »).
-            onPressed: () => setState(() => selectedIndex = 9),
-            icon: const Icon(Icons.notifications_none),
-          ),
-          const Padding(
-            padding: EdgeInsets.only(right: 16),
-            child: CircleAvatar(radius: 17, child: Text('C')),
-          ),
-        ],
-      ),
-      drawer: Drawer(
-        child: SafeArea(
-          child: ListView(
-            padding: const EdgeInsets.symmetric(vertical: 12),
-            children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(20, 10, 20, 20),
-                child: Row(
-                  children: [
-                    Image.asset('assets/tena_icon.png', width: 42, height: 42),
-                    const SizedBox(width: 12),
-                    const Text(
-                      'TENΛ Budget',
-                      style: TextStyle(
-                        fontSize: 22,
-                        fontWeight: FontWeight.bold,
-                      ),
+    final sidebar = TenaSidebar(
+      items: pages,
+      selectedIndex: selectedIndex,
+      onSelected: _selectPage,
+    );
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isWide = constraints.maxWidth >= _wideBreakpoint;
+
+        final content = _buildPage(current);
+
+        return Scaffold(
+          key: _scaffoldKey,
+
+          // Sur grand écran la navigation est permanente ; sur téléphone elle
+          // passe dans le tiroir. Le même composant sert les deux cas.
+          appBar: isWide
+              ? null
+              : AppBar(
+                  titleSpacing: 0,
+                  leading: IconButton(
+                    icon: const Icon(Icons.menu_rounded),
+                    tooltip: 'Navigation',
+                    onPressed: () =>
+                        _scaffoldKey.currentState?.openDrawer(),
+                  ),
+                  title: Text(
+                    current.title,
+                    style: const TextStyle(fontWeight: FontWeight.w700),
+                  ),
+                  actions: [
+                    IconButton(
+                      tooltip: 'Notifications',
+                      onPressed: () => _selectPage(9),
+                      icon: const Icon(Icons.notifications_none),
                     ),
+                    const SizedBox(width: TenaSpacing.sm),
                   ],
                 ),
-              ),
-              for (int i = 0; i < pages.length; i++)
-                ListTile(
-                  leading: Icon(pages[i].icon),
-                  title: Text(pages[i].title),
-                  selected: selectedIndex == i,
-                  onTap: () {
-                    setState(() => selectedIndex = i);
-                    Navigator.pop(context);
-                  },
+
+          drawer: isWide
+              ? null
+              : Drawer(
+                  width: TenaSidebar.drawerWidth,
+                  backgroundColor: const Color(0xFF0D0D10),
+                  child: sidebar,
                 ),
-            ],
-          ),
-        ),
-      ),
-      body: _buildPage(current),
+
+          body: isWide
+              ? Row(
+                  children: [
+                    SizedBox(width: TenaSidebar.railWidth, child: sidebar),
+                    const VerticalDivider(width: 1),
+                    Expanded(child: content),
+                  ],
+                )
+              : content,
+        );
+      },
     );
   }
 
-  Widget _buildPage(_Page page) {
+  Widget _buildPage(TenaNavItem page) {
     if (selectedIndex == 0) {
       return DashboardPage(period: _period, onNavigate: _goToPage);
     }
@@ -253,6 +297,18 @@ class _DashboardPageState extends State<DashboardPage> {
     _summaryFuture = FinanceService.getSummaryForMonth(
       widget.period.selectedMonth,
     );
+
+    // Le budget global est injecté dans le tableau de bord : il sert à la
+    // carte « Budget global » et aux alertes, et doit donc refléter la
+    // dernière valeur enregistrée dans le module Budget.
+    BudgetService.getGlobalBudget().then((value) {
+      if (!mounted) return;
+
+      setState(() => _DashboardBudget.lastKnown = value);
+    }).catchError((_) {
+      // Un budget illisible ne doit pas empêcher l'affichage du tableau de
+      // bord : la carte indiquera « Aucun budget défini ».
+    });
   }
 
   void _changeMonth(int amount) {
@@ -283,10 +339,6 @@ class _DashboardPageState extends State<DashboardPage> {
     ];
 
     return months[date.month - 1];
-  }
-
-  String _money(double value) {
-    return '${value.toStringAsFixed(2).replaceAll('.', ',')} €';
   }
 
   /// Agrège les transactions par jour calendaire.
@@ -728,265 +780,46 @@ class _DashboardPageState extends State<DashboardPage> {
 
         return LayoutBuilder(
           builder: (context, constraints) {
-            final horizontalPadding = constraints.maxWidth >= 1000
-                ? 32.0
-                : 20.0;
-
             return SingleChildScrollView(
               padding: EdgeInsets.fromLTRB(
-                horizontalPadding,
-                24,
-                horizontalPadding,
-                32,
+                TenaSpacing.gutter(constraints.maxWidth),
+                TenaSpacing.xl,
+                TenaSpacing.gutter(constraints.maxWidth),
+                TenaSpacing.xxl,
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Bonjour 👋',
-                              style: const TextStyle(
-                                fontSize: 30,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            const SizedBox(height: 6),
-                            Text(
-                              'Voici la situation de ton budget.',
-                              style: TextStyle(
-                                color: Theme.of(context)
-                                    .colorScheme
-                                    .onSurfaceVariant,
-                                fontSize: 16,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      if (constraints.maxWidth >= 700)
-                        Padding(
-                          padding: const EdgeInsets.only(left: 16),
-                          child: Image.asset(
-                            'assets/tena_icon.png',
-                            width: 48,
-                            height: 48,
-                          ),
-                        ),
-                    ],
-                  ),
+                  // Rangée d'en-tête : titre à gauche, sélecteur de période et
+                  // action IA à droite. Sur téléphone, tout se réempile.
+                  _dashboardHeader(context, constraints.maxWidth),
 
                   const SizedBox(height: TenaSpacing.xl),
 
-                  _monthSelector(context),
-
-                  const SizedBox(height: TenaSpacing.lg),
-
                   _overviewCard(context, summary),
 
-                  const SizedBox(height: TenaSpacing.xxl),
+                  const SizedBox(height: TenaSpacing.xl),
 
-                  TenaSectionTitle(
-                    title: 'Vue d’ensemble',
-                    subtitle: 'Les indicateurs clés de la période sélectionnée.',
-                    icon: Icons.dashboard_outlined,
-                  ),
+                  // Zone d'alertes calculée à partir des données réelles :
+                  // budget, solde et objectifs. Elle n'apparaît que si une
+                  // alerte est réellement déclenchée.
+                  _alertsSection(summary),
 
-                  const SizedBox(height: TenaSpacing.md),
+                  const SizedBox(height: TenaSpacing.xl),
 
-                  LayoutBuilder(
-                    builder: (context, cardConstraints) {
-                      final width = cardConstraints.maxWidth;
+                  _statsGrid(context, summary),
 
-                      final columns = width >= 1100
-                          ? 4
-                          : width >= 620
-                          ? 2
-                          : 1;
+                  const SizedBox(height: TenaSpacing.xl),
 
-                      const gap = TenaSpacing.md;
+                  _chartSection(context, summary, chart),
 
-                      final cardWidth = (width - gap * (columns - 1)) / columns;
+                  const SizedBox(height: TenaSpacing.xl),
 
-                      final isPositive = summary.balance >= 0;
+                  _bottomColumns(context, summary),
 
-                      return Wrap(
-                        spacing: gap,
-                        runSpacing: gap,
-                        children: [
-                          TenaStatCard(
-                            width: cardWidth,
-                            label: 'Solde',
-                            value: tenaMoney(summary.balance),
-                            icon: Icons.account_balance_wallet_outlined,
-                            valueColor: isPositive
-                                ? TenaColors.goldLight
-                                : TenaColors.danger,
-                            hint: isPositive ? 'Excédent' : 'Découvert',
-                            hintIsWarning: !isPositive,
-                          ),
-                          TenaStatCard(
-                            width: cardWidth,
-                            label: 'Revenus',
-                            value: tenaMoney(summary.income),
-                            icon: Icons.south_west_rounded,
-                            valueColor: TenaColors.success,
-                          ),
-                          TenaStatCard(
-                            width: cardWidth,
-                            label: 'Dépenses',
-                            value: tenaMoney(summary.expenses),
-                            icon: Icons.north_east_rounded,
-                            valueColor: TenaColors.danger,
-                          ),
-                          TenaStatCard(
-                            width: cardWidth,
-                            label: 'Transactions',
-                            value: '${summary.allTransactions.length}',
-                            icon: Icons.receipt_long_outlined,
-                            hint: 'sur la période',
-                          ),
-                        ],
-                      );
-                    },
-                  ),
+                  const SizedBox(height: TenaSpacing.xl),
 
-                  const SizedBox(height: TenaSpacing.xxl),
-
-                  if (summary.allTransactions.isNotEmpty) ...[
-                    const TenaSectionTitle(
-                      title: 'Évolution financière',
-                      subtitle: 'Revenus et dépenses du mois.',
-                      icon: Icons.show_chart_rounded,
-                    ),
-                    const SizedBox(height: TenaSpacing.md),
-                    TenaCard(
-                      child: FinanceChart(
-                        income: chart.income,
-                        expenses: chart.expenses,
-                        labels: chart.labels,
-                      ),
-                    ),
-                    const SizedBox(height: TenaSpacing.xxl),
-                  ],
-
-                  // L'assistant IA est l'action principale du tableau de
-                  // bord : elle reçoit un liseré doré, un dégradé et une
-                  // zone tactile large.
                   _aiCard(context),
-
-                  const SizedBox(height: TenaSpacing.xxl),
-
-                  const TenaSectionTitle(
-                    title: 'Activité récente',
-                    subtitle: 'Les dernières opérations de ce mois.',
-                    icon: Icons.receipt_long_outlined,
-                  ),
-
-                  const SizedBox(height: TenaSpacing.md),
-
-                  if (summary.recentTransactions.isEmpty)
-                    Card(
-                      elevation: 0,
-                      child: Padding(
-                        padding: const EdgeInsets.all(28),
-                        child: Center(
-                          child: Column(
-                            children: [
-                              Icon(
-                                Icons.receipt_long_outlined,
-                                size: 42,
-                                color: Theme.of(context)
-                                    .colorScheme
-                                    .onSurfaceVariant,
-                              ),
-                              const SizedBox(height: 10),
-                              Text(
-                                'Aucune transaction pour ce mois.',
-                                style: TextStyle(
-                                  color: Theme.of(context)
-                                      .colorScheme
-                                      .onSurfaceVariant,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    )
-                  else
-                    Card(
-                      elevation: 0,
-                      child: Column(
-                        children: summary.recentTransactions.asMap().entries.map((
-                          entry,
-                        ) {
-                          final index = entry.key;
-                          final transaction = entry.value;
-                          final isIncome =
-                              transaction.type == TransactionType.income;
-
-                          return Column(
-                            children: [
-                              ListTile(
-                                contentPadding: const EdgeInsets.symmetric(
-                                  horizontal: 18,
-                                  vertical: 6,
-                                ),
-                                leading: Container(
-                                  width: 42,
-                                  height: 42,
-                                  decoration: BoxDecoration(
-                                    color: Theme.of(context)
-                                        .colorScheme
-                                        .primaryContainer,
-                                    borderRadius: BorderRadius.circular(13),
-                                  ),
-                                  child: Icon(
-                                    isIncome
-                                        ? Icons.arrow_downward_rounded
-                                        : Icons.arrow_upward_rounded,
-                                  ),
-                                ),
-                                title: Text(
-                                  transaction.description.isEmpty
-                                      ? transaction.category
-                                      : transaction.description,
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                                subtitle: Padding(
-                                  padding: const EdgeInsets.only(top: 3),
-                                  child: Text(transaction.category),
-                                ),
-                                trailing: Text(
-                                  '${isIncome ? '+' : '-'}${_money(transaction.amount)}',
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 15,
-                                  ),
-                                ),
-                              ),
-                              if (index < summary.recentTransactions.length - 1)
-                                Divider(
-                                  height: 1,
-                                  indent: 18,
-                                  endIndent: 18,
-                                  color: Theme.of(context)
-                                      .colorScheme
-                                      .outlineVariant,
-                                ),
-                            ],
-                          );
-                        }).toList(),
-                      ),
-                    ),
                 ],
               ),
             );
@@ -995,9 +828,631 @@ class _DashboardPageState extends State<DashboardPage> {
       },
     );
   }
+
+  /// En-tête du tableau de bord : titre, période et accès rapide.
+  Widget _dashboardHeader(BuildContext context, double width) {
+    final compact = width < 760;
+
+    final heading = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text('Bonjour 👋', style: TenaLabels.title),
+        const SizedBox(height: TenaSpacing.xs),
+        Text(
+          'Voici la situation de ton budget.',
+          style: TenaLabels.subtitle,
+        ),
+      ],
+    );
+
+    final controls = Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Flexible(child: _monthSelector(context)),
+        const SizedBox(width: TenaSpacing.sm),
+        Material(
+          color: TenaColors.surface,
+          borderRadius: TenaRadius.md,
+          child: InkWell(
+            onTap: () => widget.onNavigate(2),
+            borderRadius: TenaRadius.md,
+            child: Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                borderRadius: TenaRadius.md,
+                border: Border.all(color: TenaColors.border),
+              ),
+              child: const Icon(
+                Icons.add_rounded,
+                size: 22,
+                color: TenaColors.gold,
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+
+    if (compact) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          heading,
+          const SizedBox(height: TenaSpacing.md),
+          controls,
+        ],
+      );
+    }
+
+    return Row(
+      children: [
+        Expanded(child: heading),
+        const SizedBox(width: TenaSpacing.lg),
+        controls,
+      ],
+    );
+  }
+
+  /// Grille Revenus / Dépenses / Budget.
+  ///
+  /// Le budget est calculé ici et non importé d'une page : le tableau de bord
+  /// doit se suffire à lui-même, sans changement d'onglet.
+  Widget _statsGrid(BuildContext context, FinanceSummary summary) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final width = constraints.maxWidth;
+
+        final columns = width >= 900
+            ? 3
+            : width >= 560
+            ? 2
+            : 1;
+
+        const gap = TenaSpacing.md;
+
+        final cardWidth = (width - gap * (columns - 1)) / columns;
+
+        final budget = _DashboardBudget.of(summary);
+
+        return Wrap(
+          spacing: gap,
+          runSpacing: gap,
+          children: [
+            TenaStatCard(
+              width: cardWidth,
+              label: 'Revenus',
+              value: tenaMoney(summary.income),
+              icon: Icons.south_west_rounded,
+              valueColor: TenaColors.success,
+              hint: summary.income > 0
+                  ? 'Entrés du mois'
+                  : 'Aucun revenu déclaré',
+            ),
+            TenaStatCard(
+              width: cardWidth,
+              label: 'Dépenses',
+              value: tenaMoney(summary.expenses),
+              icon: Icons.north_east_rounded,
+              valueColor: TenaColors.danger,
+              hint: summary.expenses > 0
+                  ? '${summary.allTransactions.length} opérations'
+                  : 'Aucune dépense',
+            ),
+            TenaStatCard(
+              width: cardWidth,
+              label: 'Budget global',
+              value: budget.hasBudget
+                  ? tenaMoney(budget.remaining)
+                  : '—',
+              icon: Icons.account_balance_wallet_outlined,
+              valueColor: budget.overBudget
+                  ? TenaColors.danger
+                  : TenaColors.goldLight,
+              hint: budget.hint,
+              hintIsWarning: budget.overBudget,
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+
+  /// Zone d'alertes intelligentes.
+  ///
+  /// Les alertes proviennent de [NotificationRules] et portent donc sur des
+  /// faits calculés, jamais sur des textes figés. La zone disparaît
+  /// entièrement lorsqu'aucune alerte n'est justifiée.
+  Widget _alertsSection(FinanceSummary summary) {
+    final budget = _DashboardBudget.of(summary);
+
+    final alerts = <_DashboardAlert>[
+      if (budget.overBudget)
+        _DashboardAlert(
+          title: 'Budget global dépassé',
+          message:
+              'Tu as dépassé ton budget de ${tenaMoney(-budget.remaining)} '
+              'ce mois-ci.',
+          severity: NotificationSeverity.critical,
+          pageIndex: 1,
+        )
+      else if (budget.hasBudget && budget.ratio >= 0.9)
+        _DashboardAlert(
+          title: 'Budget bientôt atteint',
+          message:
+              'Tu as consommé ${(budget.ratio * 100).round()} % de ton '
+              'budget global.',
+          severity: NotificationSeverity.warning,
+          pageIndex: 1,
+        ),
+      if (summary.income > 0 && summary.balance < 0)
+        _DashboardAlert(
+          title: 'Solde négatif',
+          message:
+              'Tes dépenses dépassent tes revenus de '
+              '${tenaMoney(-summary.balance)}.',
+          severity: NotificationSeverity.critical,
+          pageIndex: 6,
+        ),
+    ];
+
+    if (alerts.isEmpty) return const SizedBox.shrink();
+
+    return TenaCard(
+      padding: const EdgeInsets.all(TenaSpacing.lg),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(
+                Icons.notifications_active_outlined,
+                size: 16,
+                color: TenaColors.gold,
+              ),
+              const SizedBox(width: TenaSpacing.sm),
+              const Expanded(
+                child: Text('ALERTES', style: TenaLabels.overline),
+              ),
+              Text(
+                '${alerts.length}',
+                style: const TextStyle(
+                  fontWeight: FontWeight.w700,
+                  color: TenaColors.gold,
+                  fontSize: 13,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: TenaSpacing.md),
+          ...alerts.map(
+            (alert) => Padding(
+              padding: const EdgeInsets.only(bottom: TenaSpacing.sm),
+              child: _AlertRow(
+                alert: alert,
+                onTap: () => widget.onNavigate(alert.pageIndex),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Section graphique, intégrée dans une carte unique.
+  Widget _chartSection(
+    BuildContext context,
+    FinanceSummary summary,
+    _DailyChart chart,
+  ) {
+    final hasData = chart.labels.isNotEmpty;
+
+    return TenaCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Expanded(
+                child: Text(
+                  'Revenus et dépenses',
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              if (hasData)
+                Text(
+                  '${chart.labels.length} jour'
+                  '${chart.labels.length > 1 ? 's' : ''}',
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: TenaColors.textTertiary,
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: TenaSpacing.lg),
+          if (hasData)
+            FinanceChart(
+              income: chart.income,
+              expenses: chart.expenses,
+              labels: chart.labels,
+            )
+          else
+            const TenaEmptyState(
+              icon: Icons.show_chart_rounded,
+              title: 'Pas encore de données',
+              message:
+                  'Le graphique se remplira dès que tu enregistreras des '
+                  'transactions sur ce mois.',
+            ),
+        ],
+      ),
+    );
+  }
+
+  /// Bas de page : objectifs à gauche, activité récente à droite.
+  ///
+  /// Sur téléphone les deux sections s'empilent.
+  Widget _bottomColumns(BuildContext context, FinanceSummary summary) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final twoColumns = constraints.maxWidth >= 860;
+
+        final goals = _goalsSection();
+
+        final activity = _recentSection(summary);
+
+        if (!twoColumns) {
+          return Column(
+            children: [
+              goals,
+              const SizedBox(height: TenaSpacing.xl),
+              activity,
+            ],
+          );
+        }
+
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(child: goals),
+            const SizedBox(width: TenaSpacing.lg),
+            Expanded(child: activity),
+          ],
+        );
+      },
+    );
+  }
+
+
+  /// Section « Objectifs » : aperçu des objectifs en cours.
+  ///
+  /// Les données proviennent de [GoalService] : aucun objectif n'est
+  /// inventé, et la section n'affiche que l'état réel de l'épargne.
+  Widget _goalsSection() {
+    return TenaFutureSection(
+      future: GoalService.getGoals(),
+      title: 'Objectifs',
+      icon: Icons.track_changes_outlined,
+      emptyIcon: Icons.track_changes_outlined,
+      emptyTitle: 'Aucun objectif',
+      emptyMessage:
+          'Crée un objectif pour suivre ton épargne mois après mois.',
+      emptyActionLabel: 'Créer un objectif',
+      onEmptyAction: () => widget.onNavigate(4),
+      builder: (context, goals) {
+        if (goals.isEmpty) {
+          return const TenaEmptyState(
+            icon: Icons.track_changes_outlined,
+            title: 'Aucun objectif',
+            message:
+                'Crée un objectif pour suivre ton épargne mois après mois.',
+          );
+        }
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'OBJECTIFS',
+              style: TenaLabels.overline,
+            ),
+            const SizedBox(height: TenaSpacing.md),
+            ...goals.take(3).map(
+              (goal) => Padding(
+                padding: const EdgeInsets.only(bottom: TenaSpacing.md),
+                child: _GoalPreviewRow(
+                  name: goal.name,
+                  saved: goal.saved,
+                  target: goal.target,
+                ),
+              ),
+            ),
+            if (goals.length > 3)
+              TextButton.icon(
+                onPressed: () => widget.onNavigate(4),
+                icon: const Icon(Icons.arrow_forward_rounded, size: 16),
+                label: Text('Voir les ${goals.length} objectifs'),
+              ),
+          ],
+        );
+      },
+    );
+  }
+
+  /// Section « Activité récente » : les dernières transactions du mois.
+  Widget _recentSection(FinanceSummary summary) {
+    final transactions = summary.recentTransactions;
+
+    return TenaCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Expanded(
+                child: Text(
+                  'ACTIVITÉ RÉCENTE',
+                  style: TenaLabels.overline,
+                ),
+              ),
+              if (transactions.isNotEmpty)
+                TextButton(
+                  onPressed: () => widget.onNavigate(2),
+                  child: const Text('Tout voir'),
+                ),
+            ],
+          ),
+          const SizedBox(height: TenaSpacing.md),
+          if (transactions.isEmpty)
+            const TenaEmptyState(
+              icon: Icons.receipt_long_outlined,
+              title: 'Aucune transaction',
+              message:
+                  'Les opérations du mois s\'afficheront ici dès ton premier '
+                  'enregistrement.',
+            )
+          else
+            ...transactions.asMap().entries.map(
+              (entry) => Padding(
+                padding: EdgeInsets.only(
+                  bottom: entry.key == transactions.length - 1
+                      ? 0
+                      : TenaSpacing.md,
+                ),
+                child: _TransactionRow(transaction: entry.value),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
 }
 
-/// Bouton de navigation de période.
+/// Budget global ramené dans le tableau de bord.
+///
+/// Encapsule les calculs de reste et de dépassement, utilisés à la fois par la
+/// grille de statistiques et par la zone d'alertes : sans cette classe, les
+/// deux sections recalculaient le même ratio séparément.
+class _DashboardBudget {
+  final double budget;
+  final double expenses;
+
+  const _DashboardBudget({required this.budget, required this.expenses});
+
+  /// Dernier budget global connu, mis à jour à chaque chargement par
+  /// [_DashboardPageState] depuis [BudgetService].
+  ///
+  /// Le tableau de bord ne possède pas de stockage propre ; cette valeur lui
+  /// est injectée plutôt que relue, afin de ne pas doubler les lectures de
+  /// préférences à chaque reconstruction.
+  static double lastKnown = 0;
+
+  static _DashboardBudget of(FinanceSummary summary) {
+    return _DashboardBudget(
+      budget: lastKnown,
+      expenses: summary.expenses,
+    );
+  }
+
+  bool get hasBudget => budget > 0;
+
+  double get remaining => budget - expenses;
+
+  bool get overBudget => hasBudget && remaining < 0;
+
+  double get ratio => hasBudget ? expenses / budget : 0;
+
+  String get hint {
+    if (!hasBudget) return 'Aucun budget défini';
+
+    if (overBudget) return 'Dépassement de ${tenaMoney(-remaining)}';
+
+    return 'Il reste ${tenaMoney(remaining)}';
+  }
+}
+
+/// Alerte affichée dans la zone d'alertes du tableau de bord.
+class _DashboardAlert {
+  final String title;
+  final String message;
+  final NotificationSeverity severity;
+  final int pageIndex;
+
+  const _DashboardAlert({
+    required this.title,
+    required this.message,
+    required this.severity,
+    required this.pageIndex,
+  });
+
+  Color get color {
+    switch (severity) {
+      case NotificationSeverity.info:
+        return TenaColors.info;
+      case NotificationSeverity.warning:
+        return const Color(0xFFFBBF24);
+      case NotificationSeverity.critical:
+        return TenaColors.danger;
+    }
+  }
+
+  IconData get icon {
+    switch (severity) {
+      case NotificationSeverity.info:
+        return Icons.info_outline_rounded;
+      case NotificationSeverity.warning:
+        return Icons.warning_amber_rounded;
+      case NotificationSeverity.critical:
+        return Icons.error_outline_rounded;
+    }
+  }
+}
+
+/// Ligne d'alerte cliquable : redirige vers le module concerne.
+class _AlertRow extends StatelessWidget {
+  final _DashboardAlert alert;
+  final VoidCallback onTap;
+
+  const _AlertRow({required this.alert, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: alert.color.withValues(alpha: 0.07),
+      borderRadius: TenaRadius.md,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: TenaRadius.md,
+        child: Container(
+          padding: const EdgeInsets.all(TenaSpacing.md),
+          decoration: BoxDecoration(
+            borderRadius: TenaRadius.md,
+            border: Border(left: BorderSide(color: alert.color, width: 3)),
+          ),
+          child: Row(
+            children: [
+              Icon(alert.icon, size: 17, color: alert.color),
+              const SizedBox(width: TenaSpacing.md),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      alert.title,
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      alert.message,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: TenaColors.textSecondary,
+                        height: 1.35,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const Icon(
+                Icons.chevron_right_rounded,
+                size: 18,
+                color: TenaColors.textTertiary,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Apercu d'un objectif dans le tableau de bord.
+class _GoalPreviewRow extends StatelessWidget {
+  final String name;
+  final double saved;
+  final double target;
+
+  const _GoalPreviewRow({
+    required this.name,
+    required this.saved,
+    required this.target,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final reached = target > 0 && saved >= target;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontSize: 13.5,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+            Text(
+              reached
+                  ? 'Atteint'
+                  : '${tenaMoney(saved)} / ${tenaMoney(target)}',
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: reached
+                    ? TenaColors.success
+                    : TenaColors.textSecondary,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: TenaSpacing.sm),
+        TenaProgressBar(value: saved, total: target, height: 7),
+      ],
+    );
+  }
+}
+
+/// Ligne de transaction du tableau de bord.
+class _TransactionRow extends StatelessWidget {
+  final Transaction transaction;
+
+  const _TransactionRow({required this.transaction});
+
+  @override
+  Widget build(BuildContext context) {
+    final isIncome = transaction.type == TransactionType.income;
+
+    return TenaTransactionRow(
+      title: transaction.description.isEmpty
+          ? transaction.category
+          : transaction.description,
+      subtitle: transaction.category,
+      amount: tenaMoney(transaction.amount),
+      isIncome: isIncome,
+      trailingDate:
+          '${transaction.date.day.toString().padLeft(2, '0')}/'
+          '${transaction.date.month.toString().padLeft(2, '0')}',
+    );
+  }
+}
+
+
 ///
 /// Isolé pour que les deux flèches partagent exactement le même rendu et la
 /// même zone tactile.
@@ -1088,12 +1543,6 @@ class _OverviewMiniStat extends StatelessWidget {
 }
 
 
-class _Page {
-  final String title;
-  final IconData icon;
-
-  const _Page({required this.title, required this.icon});
-}
 
 class _DailyTotals {
   double income = 0;
