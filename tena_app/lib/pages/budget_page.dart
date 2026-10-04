@@ -20,6 +20,12 @@ class _BudgetPageState extends State<BudgetPage> {
   List<String> _categories = [];
   List<Transaction> _transactions = [];
 
+  /// Budgets par catégorie, chargés une seule fois par chargement.
+  /// Auparavant un FutureBuilder était créé directement dans build(), ce qui
+  /// relisait les préférences à chaque reconstruction et faisait clignoter les
+  /// cartes au premier affichage.
+  Map<String, double> _categoryBudgets = {};
+
   double _globalBudget = 0;
   bool _loading = true;
 
@@ -44,12 +50,20 @@ class _BudgetPageState extends State<BudgetPage> {
     final transactions = await _database.getTransactions();
     final globalBudget = await BudgetService.getGlobalBudget();
 
+    final categoryBudgets = <String, double>{};
+
+    for (final category in categories) {
+      categoryBudgets[category] =
+          await BudgetService.getCategoryBudget(category);
+    }
+
     if (!mounted) return;
 
     setState(() {
       _categories = categories;
       _transactions = transactions;
       _globalBudget = globalBudget;
+      _categoryBudgets = categoryBudgets;
       _loading = false;
     });
   }
@@ -316,75 +330,70 @@ class _BudgetPageState extends State<BudgetPage> {
 
             const SizedBox(height: 12),
 
-            ..._categories.map(
-              (category) => FutureBuilder<double>(
-                future: BudgetService.getCategoryBudget(category),
-                builder: (context, snapshot) {
-                  final budget = snapshot.data ?? 0;
-                  final spent = _categorySpent(category);
-                  final remaining = budget - spent;
-                  final progress = budget <= 0
-                      ? 0.0
-                      : (spent / budget).clamp(0.0, 1.0);
+            ..._categories.map((category) {
+              final budget = _categoryBudgets[category] ?? 0;
+              final spent = _categorySpent(category);
+              final remaining = budget - spent;
+              final progress = budget <= 0
+                  ? 0.0
+                  : (spent / budget).clamp(0.0, 1.0);
 
-                  return Card(
-                    margin: const EdgeInsets.only(bottom: 12),
-                    child: Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Column(
+              return Card(
+                margin: const EdgeInsets.only(bottom: 12),
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    children: [
+                      Row(
                         children: [
-                          Row(
-                            children: [
-                              Expanded(
-                                child: Text(
-                                  category,
-                                  style: const TextStyle(
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                              ),
-                              Text(
-                                budget > 0
-                                    ? '${_money(spent)} / ${_money(budget)}'
-                                    : _money(spent),
-                                style: const TextStyle(
-                                  fontSize: 16,
-                                ),
-                              ),
-                              IconButton(
-                                onPressed: () => _editCategoryBudget(category),
-                                icon: const Icon(Icons.edit_outlined),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 12),
-                          LinearProgressIndicator(
-                            value: progress,
-                            minHeight: 10,
-                          ),
-                          const SizedBox(height: 12),
-                          Align(
-                            alignment: Alignment.centerLeft,
+                          Expanded(
                             child: Text(
-                              budget <= 0
-                                  ? 'Aucun budget défini'
-                                  : remaining >= 0
-                                  ? 'Reste ${_money(remaining)}'
-                                  : 'Dépassement de ${_money(-remaining)}',
+                              category,
                               style: const TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w500,
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
                               ),
                             ),
                           ),
+                          Text(
+                            budget > 0
+                                ? '${_money(spent)} / ${_money(budget)}'
+                                : _money(spent),
+                            style: const TextStyle(
+                              fontSize: 16,
+                            ),
+                          ),
+                          IconButton(
+                            onPressed: () => _editCategoryBudget(category),
+                            icon: const Icon(Icons.edit_outlined),
+                          ),
                         ],
                       ),
-                    ),
-                  );
-                },
-              ),
-            ),
+                      const SizedBox(height: 12),
+                      LinearProgressIndicator(
+                        value: progress,
+                        minHeight: 10,
+                      ),
+                      const SizedBox(height: 12),
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          budget <= 0
+                              ? 'Aucun budget défini'
+                              : remaining >= 0
+                              ? 'Reste ${_money(remaining)}'
+                              : 'Dépassement de ${_money(-remaining)}',
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            }),
           ],
         ),
       ),

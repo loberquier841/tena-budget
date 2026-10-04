@@ -12,6 +12,7 @@ import 'package:fl_chart/fl_chart.dart';
 
 import 'models/transaction.dart';
 import 'services/finance_service.dart';
+import 'state/period_state.dart';
 
 void main() {
   runApp(const TenaBudgetApp());
@@ -61,6 +62,11 @@ class TenaHome extends StatefulWidget {
 class _TenaHomeState extends State<TenaHome> {
   int selectedIndex = 0;
 
+  /// Période partagée par les pages : le mois sélectionné sur le tableau de
+  /// bord s'applique également au module Budget (PeriodState était jusqu'ici
+  /// créé mais jamais utilisé).
+  final PeriodState _period = PeriodState();
+
   final pages = const [
     _Page(title: 'Accueil', icon: Icons.home_outlined),
     _Page(title: 'Budget', icon: Icons.account_balance_wallet_outlined),
@@ -78,6 +84,12 @@ class _TenaHomeState extends State<TenaHome> {
     _Page(title: 'Autopilot', icon: Icons.bolt_outlined),
     _Page(title: 'Paramètres', icon: Icons.settings_outlined),
   ];
+
+  @override
+  void dispose() {
+    _period.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -155,11 +167,11 @@ class _TenaHomeState extends State<TenaHome> {
 
   Widget _buildPage(_Page page) {
     if (selectedIndex == 0) {
-      return const DashboardPage();
+      return DashboardPage(period: _period);
     }
 
     if (selectedIndex == 1) {
-      return BudgetPage(month: DateTime.now());
+      return BudgetPage(month: _period.selectedMonth);
     }
 
     if (selectedIndex == 2) {
@@ -205,7 +217,9 @@ class _TenaHomeState extends State<TenaHome> {
 }
 
 class DashboardPage extends StatefulWidget {
-  const DashboardPage({super.key});
+  final PeriodState period;
+
+  const DashboardPage({super.key, required this.period});
 
   @override
   State<DashboardPage> createState() => _DashboardPageState();
@@ -214,8 +228,6 @@ class DashboardPage extends StatefulWidget {
 class _DashboardPageState extends State<DashboardPage> {
   late Future<FinanceSummary> _summaryFuture;
 
-  DateTime _selectedMonth = DateTime(DateTime.now().year, DateTime.now().month);
-
   @override
   void initState() {
     super.initState();
@@ -223,17 +235,20 @@ class _DashboardPageState extends State<DashboardPage> {
   }
 
   void _loadMonth() {
-    _summaryFuture = FinanceService.getSummaryForMonth(_selectedMonth);
+    _summaryFuture = FinanceService.getSummaryForMonth(
+      widget.period.selectedMonth,
+    );
   }
 
   void _changeMonth(int amount) {
-    setState(() {
-      _selectedMonth = DateTime(
-        _selectedMonth.year,
-        _selectedMonth.month + amount,
-      );
-      _loadMonth();
-    });
+    // La période est partagée : le module Budget suivra le mois choisi ici.
+    if (amount < 0) {
+      widget.period.previousMonth();
+    } else {
+      widget.period.nextMonth();
+    }
+
+    setState(_loadMonth);
   }
 
   String _monthName(DateTime date) {
@@ -334,7 +349,8 @@ class _DashboardPageState extends State<DashboardPage> {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    '${_monthName(_selectedMonth)} ${_selectedMonth.year}',
+                    '${_monthName(widget.period.selectedMonth)} '
+                    '${widget.period.selectedMonth.year}',
                     textAlign: TextAlign.center,
                     style: const TextStyle(
                       fontSize: 20,
