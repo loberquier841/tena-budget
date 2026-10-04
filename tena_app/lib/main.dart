@@ -274,21 +274,46 @@ class _DashboardPageState extends State<DashboardPage> {
     return '${value.toStringAsFixed(2).replaceAll('.', ',')} €';
   }
 
-  List<FlSpot> _chartSpots(
-    List<Transaction> transactions,
-    TransactionType type,
-  ) {
-    final spots = <FlSpot>[];
+  /// Agrège les transactions par jour calendaire.
+  ///
+  /// Auparavant, une pointe était créée par transaction : l'axe X
+  /// représentait l'ordre des lignes et non les dates, ce qui était trompeur
+  /// (deux mouvements le même jour apparaissaient à deux abscisses). Les deux
+  /// séries partagent désormais le même axe, avec 0 pour un jour sans mouvement.
+  _DailyChart _dailyChart(List<Transaction> transactions) {
+    final totals = <DateTime, _DailyTotals>{};
 
-    for (var i = 0; i < transactions.length; i++) {
-      final transaction = transactions[i];
+    for (final transaction in transactions) {
+      final day = DateTime(
+        transaction.date.year,
+        transaction.date.month,
+        transaction.date.day,
+      );
 
-      if (transaction.type == type) {
-        spots.add(FlSpot(i.toDouble(), transaction.amount));
+      final current = totals[day] ?? _DailyTotals();
+
+      if (transaction.type == TransactionType.income) {
+        current.income += transaction.amount;
+      } else {
+        current.expenses += transaction.amount;
       }
+
+      totals[day] = current;
     }
 
-    return spots;
+    final days = totals.keys.toList()..sort();
+
+    return _DailyChart(
+      labels: [for (final day in days) '${day.day}/${day.month}'],
+      income: [
+        for (var i = 0; i < days.length; i++)
+          FlSpot(i.toDouble(), totals[days[i]]!.income),
+      ],
+      expenses: [
+        for (var i = 0; i < days.length; i++)
+          FlSpot(i.toDouble(), totals[days[i]]!.expenses),
+      ],
+    );
   }
 
   Widget _sectionTitle(BuildContext context, String title, String subtitle) {
@@ -517,9 +542,7 @@ class _DashboardPageState extends State<DashboardPage> {
         }
 
         final summary = snapshot.data!;
-        final chartLabels = summary.allTransactions.map((transaction) {
-          return '${transaction.date.day}/${transaction.date.month}';
-        }).toList();
+        final chart = _dailyChart(summary.allTransactions);
 
         return LayoutBuilder(
           builder: (context, constraints) {
@@ -654,15 +677,9 @@ class _DashboardPageState extends State<DashboardPage> {
                         child: SizedBox(
                           height: 280,
                           child: FinanceChart(
-                            income: _chartSpots(
-                              summary.allTransactions,
-                              TransactionType.income,
-                            ),
-                            expenses: _chartSpots(
-                              summary.allTransactions,
-                              TransactionType.expense,
-                            ),
-                            labels: chartLabels,
+                            income: chart.income,
+                            expenses: chart.expenses,
+                            labels: chart.labels,
                           ),
                         ),
                       ),
@@ -941,4 +958,21 @@ class _Page {
   final IconData icon;
 
   const _Page({required this.title, required this.icon});
+}
+
+class _DailyTotals {
+  double income = 0;
+  double expenses = 0;
+}
+
+class _DailyChart {
+  final List<String> labels;
+  final List<FlSpot> income;
+  final List<FlSpot> expenses;
+
+  const _DailyChart({
+    required this.labels,
+    required this.income,
+    required this.expenses,
+  });
 }
