@@ -27,7 +27,10 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
   FlutterWindow window(project);
   Win32Window::Point origin(10, 10);
   Win32Window::Size size(1280, 720);
-  if (!window.Create(L"tena_budget", origin, size)) {
+  // Titre de fenêtre « TENΛ Budget ». Le caractère Λ est stocké en UTF-8 :
+  // l'option /utf-8 ajoutée dans CMakeLists.txt garantit que MSVC
+  // l'interprète correctement quelle que soit la page de code système.
+  if (!window.Create(L"TENΛ Budget", origin, size)) {
     return EXIT_FAILURE;
   }
   window.SetQuitOnClose(true);
