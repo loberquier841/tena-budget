@@ -2,6 +2,12 @@ import 'dart:io';
 
 import 'package:path/path.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
+// IMPORTANT : ne pas supprimer cet import.
+// Sur Android/iOS, `package:sqflite` installe la factory par défaut basée sur
+// le plugin natif. Sans lui, `databaseFactory` resterait la factory FFI et le
+// build mobile échouerait à l'exécution. L'analyseur le signale comme
+// redondant car sqflite_common_ffi ré-exporte les mêmes symboles.
+// ignore: unnecessary_import
 import 'package:sqflite/sqflite.dart';
 
 import '../models/transaction.dart' as model;

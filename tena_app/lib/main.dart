@@ -103,7 +103,9 @@ class _TenaHomeState extends State<TenaHome> {
         actions: [
           IconButton(
             tooltip: 'Notifications',
-            onPressed: () => setState(() => selectedIndex = 8),
+            // Index 9 = page « Notifications » de la liste `pages`
+            // (l'index 8 correspond à « Documents »).
+            onPressed: () => setState(() => selectedIndex = 9),
             icon: const Icon(Icons.notifications_none),
           ),
           const Padding(

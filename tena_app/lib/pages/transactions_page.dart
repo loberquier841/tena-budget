@@ -287,7 +287,7 @@ class _TransactionsPageState extends State<TransactionsPage> {
                     )
                   : ListView.separated(
                       itemCount: visibleTransactions.length,
-                      separatorBuilder: (_, __) => const SizedBox(height: 8),
+                      separatorBuilder: (_, _) => const SizedBox(height: 8),
                       itemBuilder: (context, index) {
                         final transaction = visibleTransactions[index];
 
@@ -576,7 +576,10 @@ class _TransactionDialogState extends State<_TransactionDialog> {
               const SizedBox(height: 12),
 
               DropdownButtonFormField<String>(
-                value: _selectedCategory,
+                // `initialValue` remplace `value` (déprécié depuis v3.33).
+                // Le dialogue étant recréé à chaque ouverture, la valeur
+                // initiale est toujours correctement appliquée.
+                initialValue: _selectedCategory,
                 decoration: const InputDecoration(
                   labelText: 'Catégorie',
                   border: OutlineInputBorder(),
