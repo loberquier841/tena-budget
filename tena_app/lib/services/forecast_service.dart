@@ -31,7 +31,12 @@ class ForecastService {
     final months = <String>{};
 
     for (final transaction in transactions) {
-      months.add('${transaction.date.year}-${transaction.date.month}');
+      // Clé zero-padrée : sans elle, janvier (`1`) et novembre (`11`)
+      // produiraient la même chaîne et seraient comptés pour un seul mois,
+      // ce qui gonflerait artificiellement la moyenne mensuelle.
+      final month = transaction.date.month.toString().padLeft(2, '0');
+
+      months.add('${transaction.date.year}-$month');
     }
 
     final monthCount = months.isEmpty ? 1 : months.length;

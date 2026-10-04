@@ -9,12 +9,26 @@ import 'models/finance_summary.dart';
 import 'widgets/finance_chart.dart';
 
 import 'package:fl_chart/fl_chart.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'models/transaction.dart';
+import 'services/crypto_service.dart';
 import 'services/finance_service.dart';
+import 'services/secure_key_store.dart';
 import 'state/period_state.dart';
 
-void main() {
+Future<void> main() async {
+  // La clé maîtresse doit être résolue avant le premier accès à la base : la
+  // migration v3 chiffre les lignes existantes à l'ouverture. Le keystore du
+  // système est tenté en premier, les préférences servent de repli.
+  WidgetsFlutterBinding.ensureInitialized();
+
+  CryptoService.useKeyStore(
+    SecureStorageKeyStore(
+      fallback: PreferencesKeyStore(SharedPreferences.getInstance),
+    ),
+  );
+
   runApp(const TenaBudgetApp());
 }
 

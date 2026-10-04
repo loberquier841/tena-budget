@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 // le modèle de l'application (mêmes raison que database_service.dart).
 import 'package:sqflite_common_ffi/sqflite_ffi.dart' hide Transaction;
 import 'package:tena_budget/models/transaction.dart';
+import 'package:tena_budget/services/crypto_service.dart';
 import 'package:tena_budget/services/database_service.dart';
 import 'package:tena_budget/services/finance_service.dart';
 
@@ -22,13 +23,39 @@ Transaction _transaction({
   );
 }
 
+/// Keystore stable pour toute la suite : la clé doit survivre d'un test à
+/// l'autre, sinon les lignes écrites par un test deviendraient indéchiffrables
+/// au test suivant.
+class _TestKeyStore implements SecretKeyStore {
+  String? _value;
+
+  @override
+  Future<String?> read() async => _value;
+
+  @override
+  Future<void> write(String keyBase64) async {
+    _value = keyBase64;
+  }
+
+  @override
+  Future<void> delete() async {
+    _value = null;
+  }
+}
+
 void main() {
+  // Le chiffrement v3 s'appuie sur une source de clé injectée : le binding doit
+  // être initialisé avant tout accès au stockage.
+  TestWidgetsFlutterBinding.ensureInitialized();
+
   // Ces tests s'exécutent sur la vraie base SQLite : la factory FFI est la
   // même que celle utilisée par l'application sur Linux, Windows et macOS.
   final database = DatabaseService.instance;
+  final keyStore = _TestKeyStore();
 
   setUpAll(() {
     sqfliteFfiInit();
+    CryptoService.useKeyStore(keyStore);
   });
 
   setUp(() async {
@@ -208,6 +235,64 @@ void main() {
       expect(summary.expenses, 0);
       expect(summary.balance, 0);
       expect(summary.allTransactions, isEmpty);
+    });
+  });
+
+  group('Chiffrement au repos (schéma v3)', () {
+    test('les montants et libellés sont chiffrés dans la table', () async {
+      await database.insertTransaction(
+        _transaction(id: 'c1', amount: 987.65, date: DateTime(2026, 7, 1))
+            .copyWith(notes: 'Compte 1234567890'),
+      );
+
+      // Lecture directe de la table, sans passer par le service : c'est
+      // exactement ce que verrait un attaquant ayant le fichier de base.
+      final db = await database.database;
+      final rows = await db.query('transactions');
+
+      expect(rows.single['amount'].toString(), isNot(contains('987.65')));
+      expect(rows.single['notes'].toString(), isNot(contains('1234567890')));
+      expect('${rows.single['amount']}'.startsWith('tena1:'), isTrue);
+
+      // ... et l'application relit bien la valeur d'origine.
+      final all = await database.getTransactions();
+
+      expect(all.single.amount, 987.65);
+      expect(all.single.notes, 'Compte 1234567890');
+    });
+
+    test('les totaux restent exacts malgré le chiffrement', () async {
+      await database.insertTransaction(
+        _transaction(
+          id: 'c2',
+          amount: 300,
+          date: DateTime(2026, 8, 1),
+          type: TransactionType.income,
+        ),
+      );
+      await database.insertTransaction(
+        _transaction(id: 'c3', amount: 125.5, date: DateTime(2026, 8, 2)),
+      );
+
+      final summary = await FinanceService.getSummaryForMonth(
+        DateTime(2026, 8),
+      );
+
+      expect(summary.income, 300);
+      expect(summary.expenses, 125.5);
+      expect(summary.balance, 174.5);
+    });
+
+    test('la catégorie reste en clair pour le regroupement', () async {
+      await database.insertTransaction(
+        _transaction(id: 'c4', amount: 10, date: DateTime(2026, 9, 1)),
+      );
+
+      final db = await database.database;
+      final rows = await db.query('transactions');
+
+      // La catégorie sert de clé de regroupement : elle reste interrogeable.
+      expect(rows.single['category'], 'Test');
     });
   });
 

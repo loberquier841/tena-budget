@@ -11,6 +11,7 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:sqflite/sqflite.dart';
 
 import '../models/transaction.dart' as model;
+import 'crypto_service.dart';
 
 class DatabaseService {
   static final DatabaseService instance = DatabaseService._internal();
@@ -30,7 +31,10 @@ class DatabaseService {
   ///
   /// v1 : id, amount, category, description, date, type
   /// v2 : notes, is_deleted (suppression logique) et index sur la date
-  static const int _schemaVersion = 2;
+  /// v3 : chiffrement AES-GCM des champs sensibles (montant, description,
+  ///      note). La catégorie reste en clair : elle sert de clé de regroupement
+  ///      et n'est pas à elle seule une donnée financière.
+  static const int _schemaVersion = 3;
 
   Future<Database> _initDatabase() async {
     if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
@@ -52,6 +56,10 @@ class DatabaseService {
         // dans l'ordre et permettent d'évoluer à long terme.
         if (oldVersion < 2) {
           await _migrateToV2(db);
+        }
+
+        if (oldVersion < 3) {
+          await _migrateToV3(db);
         }
 
         await _createIndexes(db);
@@ -90,6 +98,26 @@ class DatabaseService {
     );
   }
 
+  /// Migration v2 -> v3 : chiffre les données déjà présentes.
+  ///
+  /// Les lignes existantes sont relues puis réécrites chiffrées. Le préfixe
+  /// `tena1:` permet de distinguer une valeur chiffrée d'une valeur en clair :
+  /// une transaction qui l'est déjà n'est donc jamais chiffrée deux fois.
+  Future<void> _migrateToV3(Database db) async {
+    final rows = await db.query('transactions');
+
+    for (final row in rows) {
+      final transaction = await _toTransaction(row);
+
+      await db.update(
+        'transactions',
+        await _toRow(transaction),
+        where: 'id = ?',
+        whereArgs: [row['id']],
+      );
+    }
+  }
+
   Future<void> _createIndexes(Database db) async {
     await db.execute(
       'CREATE INDEX IF NOT EXISTS idx_transactions_date ON transactions(date)',
@@ -100,30 +128,34 @@ class DatabaseService {
     );
   }
 
-  Map<String, Object?> _toRow(model.Transaction transaction) {
+  /// Convertit un modèle en ligne SQLite, en chiffrant les champs sensibles.
+  Future<Map<String, Object?>> _toRow(model.Transaction transaction) async {
     return {
       'id': transaction.id,
-      'amount': transaction.amount,
+      'amount': await CryptoService.encryptNumber(transaction.amount),
       'category': transaction.category,
-      'description': transaction.description,
+      'description': await CryptoService.encrypt(transaction.description),
       'date': transaction.date.toIso8601String(),
       'type': transaction.type.name,
-      'notes': transaction.notes,
+      'notes': await CryptoService.encrypt(transaction.notes),
       'is_deleted': transaction.isDeleted ? 1 : 0,
     };
   }
 
-  model.Transaction _toTransaction(Map<String, Object?> row) {
+  /// Convertit une ligne SQLite en modèle, en déchiffrant les champs sensibles.
+  Future<model.Transaction> _toTransaction(Map<String, Object?> row) async {
     return model.Transaction(
       id: row['id'] as String,
-      amount: (row['amount'] as num).toDouble(),
+      amount: await CryptoService.decryptNumber('${row['amount']}'),
       category: row['category'] as String,
-      description: row['description'] as String,
+      description: await CryptoService.decrypt(
+        (row['description'] as String?) ?? '',
+      ),
       date: DateTime.parse(row['date'] as String),
       type: row['type'] == 'income'
           ? model.TransactionType.income
           : model.TransactionType.expense,
-      notes: (row['notes'] as String?) ?? '',
+      notes: await CryptoService.decrypt((row['notes'] as String?) ?? ''),
       isDeleted: ((row['is_deleted'] as int?) ?? 0) == 1,
     );
   }
@@ -133,7 +165,7 @@ class DatabaseService {
 
     await db.insert(
       'transactions',
-      _toRow(transaction),
+      await _toRow(transaction),
       conflictAlgorithm: ConflictAlgorithm.replace,
     );
   }
@@ -143,7 +175,7 @@ class DatabaseService {
 
     await db.update(
       'transactions',
-      _toRow(transaction),
+      await _toRow(transaction),
       where: 'id = ?',
       whereArgs: [transaction.id],
     );
@@ -199,6 +231,14 @@ class DatabaseService {
       orderBy: 'date DESC',
     );
 
-    return rows.map(_toTransaction).toList();
+    // `_toTransaction` déchiffre chaque ligne : le déchiffrement est asynchrone,
+    // la liste est donc construite champ par champ.
+    final transactions = <model.Transaction>[];
+
+    for (final row in rows) {
+      transactions.add(await _toTransaction(row));
+    }
+
+    return transactions;
   }
 }

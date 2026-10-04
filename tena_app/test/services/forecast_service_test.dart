@@ -63,5 +63,25 @@ void main() {
 
       expect(result.averageMonthlyExpenses, 300);
     });
+
+    test('distingue janvier de novembre', () {
+      // Régression : sans clé zero-padrée, `1` et `11` produisaient la même
+      // chaîne, ces deux mois n'en faisaient qu'un et la moyenne doublait.
+      final result = ForecastService.calculate([
+        _transaction(amount: 100, date: DateTime(2026, 1, 10)),
+        _transaction(amount: 200, date: DateTime(2026, 11, 10)),
+      ]);
+
+      expect(result.averageMonthlyExpenses, 150);
+    });
+
+    test('distingue les mois de même numéro selon l’année', () {
+      final result = ForecastService.calculate([
+        _transaction(amount: 100, date: DateTime(2025, 3, 10)),
+        _transaction(amount: 300, date: DateTime(2026, 3, 10)),
+      ]);
+
+      expect(result.averageMonthlyExpenses, 200);
+    });
   });
 }
