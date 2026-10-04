@@ -21,6 +21,9 @@ class _TransactionsPageState extends State<TransactionsPage> {
   TransactionType? _filterType;
   bool _newestFirst = true;
 
+  /// Affiche aussi les transactions supprimées (suppression logique).
+  bool _showDeleted = false;
+
   @override
   void initState() {
     super.initState();
@@ -39,7 +42,9 @@ class _TransactionsPageState extends State<TransactionsPage> {
   }
 
   Future<void> _loadTransactions() async {
-    final transactions = await _database.getTransactions();
+    final transactions = await _database.getTransactions(
+      includeDeleted: _showDeleted,
+    );
 
     if (!mounted) return;
 
@@ -57,6 +62,7 @@ class _TransactionsPageState extends State<TransactionsPage> {
       final text = [
         transaction.category,
         transaction.description,
+        transaction.notes,
       ].join(' ').toLowerCase();
 
       final matchesSearch = _search.isEmpty || text.contains(_search);
@@ -115,14 +121,21 @@ class _TransactionsPageState extends State<TransactionsPage> {
   }
 
   Future<void> _deleteTransaction(Transaction transaction) async {
+    if (transaction.isDeleted) {
+      await _confirmPurge(transaction);
+      return;
+    }
+
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) {
         return AlertDialog(
           title: const Text('Supprimer la transaction ?'),
           content: Text(
-            'Cette action supprimera définitivement « '
-            '${transaction.description.isEmpty ? transaction.category : transaction.description} ».',
+            '« '
+            '${transaction.description.isEmpty ? transaction.category : transaction.description}'
+            ' » sera déplacée dans les transactions supprimées. Vous pourrez la '
+            'restaurer à tout moment : aucune donnée n’est perdue.',
           ),
           actions: [
             TextButton(
@@ -142,6 +155,101 @@ class _TransactionsPageState extends State<TransactionsPage> {
 
     await _database.deleteTransaction(transaction.id);
     await _loadTransactions();
+  }
+
+  Future<void> _restoreTransaction(Transaction transaction) async {
+    await _database.restoreTransaction(transaction.id);
+    await _loadTransactions();
+
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Transaction restaurée.')),
+    );
+  }
+
+  /// Suppression définitive : elle est réservée à l'effacement explicite
+  /// demandé par l'utilisateur et n'est jamais proposée par défaut.
+  Future<void> _confirmPurge(Transaction transaction) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Supprimer définitivement ?'),
+          content: const Text(
+            'Cette transaction sera effacée de la base. Cette action est '
+            'irréversible.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Annuler'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Supprimer définitivement'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirmed != true) return;
+
+    await _database.purgeTransaction(transaction.id);
+    await _loadTransactions();
+  }
+
+  /// Actions proposées pour une transaction, qui dépendent de son état :
+  /// une transaction supprimée peut être restaurée ou effacée, plus jamais
+  /// modifiée.
+  List<PopupMenuEntry<String>> _menuItems(Transaction transaction) {
+    if (transaction.isDeleted) {
+      return const [
+        PopupMenuItem(
+          value: 'restore',
+          child: ListTile(
+            leading: Icon(Icons.restore),
+            title: Text('Restaurer'),
+          ),
+        ),
+        PopupMenuItem(
+          value: 'purge',
+          child: ListTile(
+            leading: Icon(Icons.delete_forever),
+            title: Text('Supprimer définitivement'),
+          ),
+        ),
+      ];
+    }
+
+    return const [
+      PopupMenuItem(
+        value: 'edit',
+        child: ListTile(
+          leading: Icon(Icons.edit),
+          title: Text('Modifier'),
+        ),
+      ),
+      PopupMenuItem(
+        value: 'delete',
+        child: ListTile(
+          leading: Icon(Icons.delete_outline),
+          title: Text('Supprimer'),
+        ),
+      ),
+    ];
+  }
+
+  /// Ligne secondaire de la liste : catégorie, date, note et état.
+  String _subtitle(Transaction transaction) {
+    final base = '${transaction.category} • ${_date(transaction)}';
+
+    if (transaction.isDeleted) return '$base • supprimée';
+
+    if (transaction.notes.isNotEmpty) return '$base • ${transaction.notes}';
+
+    return base;
   }
 
   String _date(Transaction transaction) {
@@ -256,6 +364,19 @@ class _TransactionsPageState extends State<TransactionsPage> {
                     icon: Icon(Icons.filter_list),
                   ),
                 ),
+                FilterChip(
+                  label: const Text('Supprimées'),
+                  avatar: const Icon(Icons.restore, size: 18),
+                  selected: _showDeleted,
+                  onSelected: (selected) {
+                    setState(() {
+                      _showDeleted = selected;
+                    });
+
+                    _loadTransactions();
+                  },
+                ),
+                const SizedBox(width: 12),
                 IconButton(
                   tooltip: _newestFirst
                       ? 'Plus anciennes d’abord'
@@ -309,7 +430,17 @@ class _TransactionsPageState extends State<TransactionsPage> {
                                   : transaction.description,
                             ),
                             subtitle: Text(
-                              '${transaction.category} • ${_date(transaction)}',
+                              _subtitle(transaction),
+                              style: TextStyle(
+                                fontStyle: transaction.isDeleted
+                                    ? FontStyle.italic
+                                    : FontStyle.normal,
+                                color: transaction.isDeleted
+                                    ? Theme.of(context)
+                                          .colorScheme
+                                          .outline
+                                    : null,
+                              ),
                             ),
                             trailing: Row(
                               mainAxisSize: MainAxisSize.min,
@@ -331,24 +462,14 @@ class _TransactionsPageState extends State<TransactionsPage> {
                                       _editTransaction(transaction);
                                     } else if (value == 'delete') {
                                       _deleteTransaction(transaction);
+                                    } else if (value == 'restore') {
+                                      _restoreTransaction(transaction);
+                                    } else if (value == 'purge') {
+                                      _confirmPurge(transaction);
                                     }
                                   },
-                                  itemBuilder: (context) => const [
-                                    PopupMenuItem(
-                                      value: 'edit',
-                                      child: ListTile(
-                                        leading: Icon(Icons.edit),
-                                        title: Text('Modifier'),
-                                      ),
-                                    ),
-                                    PopupMenuItem(
-                                      value: 'delete',
-                                      child: ListTile(
-                                        leading: Icon(Icons.delete_outline),
-                                        title: Text('Supprimer'),
-                                      ),
-                                    ),
-                                  ],
+                                  itemBuilder: (context) =>
+                                      _menuItems(transaction),
                                 ),
                               ],
                             ),
@@ -418,6 +539,7 @@ class _TransactionDialogState extends State<_TransactionDialog> {
 
   late final TextEditingController _amountController;
   late final TextEditingController _descriptionController;
+  late final TextEditingController _notesController;
 
   late TransactionType _type;
   late DateTime _date;
@@ -442,6 +564,8 @@ class _TransactionDialogState extends State<_TransactionDialog> {
     _descriptionController = TextEditingController(
       text: transaction?.description ?? '',
     );
+
+    _notesController = TextEditingController(text: transaction?.notes ?? '');
 
     _type = transaction?.type ?? TransactionType.expense;
     _date = transaction?.date ?? DateTime.now();
@@ -472,6 +596,7 @@ class _TransactionDialogState extends State<_TransactionDialog> {
   void dispose() {
     _amountController.dispose();
     _descriptionController.dispose();
+    _notesController.dispose();
     super.dispose();
   }
 
@@ -510,6 +635,10 @@ class _TransactionDialogState extends State<_TransactionDialog> {
       description: _descriptionController.text.trim(),
       date: _date,
       type: _type,
+      notes: _notesController.text.trim(),
+      // Une transaction supprimée puis restaurée conserve son état d'origine :
+      // sans cela, la ré-enregistrement la ferait repasser pour supprimée.
+      isDeleted: widget.transaction?.isDeleted ?? false,
     );
 
     Navigator.pop(context, transaction);
@@ -613,6 +742,18 @@ class _TransactionDialogState extends State<_TransactionDialog> {
                 decoration: const InputDecoration(
                   labelText: 'Description',
                   hintText: 'Optionnel',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+
+              const SizedBox(height: 12),
+
+              TextFormField(
+                controller: _notesController,
+                maxLines: 2,
+                decoration: const InputDecoration(
+                  labelText: 'Note',
+                  hintText: 'Facture, référence, commentaire...',
                   border: OutlineInputBorder(),
                 ),
               ),

@@ -103,6 +103,114 @@ void main() {
     });
   });
 
+  group('DatabaseService - suppression logique (schéma v2)', () {
+    test('les notes sont enregistrées et relues', () async {
+      await database.insertTransaction(
+        _transaction(
+          id: 'n1',
+          amount: 42,
+          date: DateTime(2026, 5, 2),
+        ).copyWith(notes: 'Facture F-2026-014'),
+      );
+
+      final all = await database.getTransactions();
+
+      expect(all.single.notes, 'Facture F-2026-014');
+    });
+
+    test('une note absente prend la valeur vide', () async {
+      await database.insertTransaction(
+        _transaction(id: 'n2', amount: 10, date: DateTime(2026, 5, 2)),
+      );
+
+      final all = await database.getTransactions();
+
+      expect(all.single.notes, isEmpty);
+      expect(all.single.isDeleted, isFalse);
+    });
+
+    test('supprimer masque la transaction sans l’effacer', () async {
+      await database.insertTransaction(
+        _transaction(id: 's1', amount: 80, date: DateTime(2026, 5, 3)),
+      );
+
+      await database.deleteTransaction('s1');
+
+      // Invisible par défaut...
+      expect(await database.getTransactions(), isEmpty);
+
+      // ... mais toujours présente en base et marquée is_deleted.
+      final withDeleted = await database.getTransactions(includeDeleted: true);
+
+      expect(withDeleted.length, 1);
+      expect(withDeleted.single.id, 's1');
+      expect(withDeleted.single.isDeleted, isTrue);
+    });
+
+    test('restaurer remet la transaction dans les résultats', () async {
+      await database.insertTransaction(
+        _transaction(id: 's2', amount: 80, date: DateTime(2026, 5, 3)),
+      );
+
+      await database.deleteTransaction('s2');
+      await database.restoreTransaction('s2');
+
+      final all = await database.getTransactions();
+
+      expect(all.length, 1);
+      expect(all.single.isDeleted, isFalse);
+    });
+
+    test('purger efface définitivement', () async {
+      await database.insertTransaction(
+        _transaction(id: 's3', amount: 80, date: DateTime(2026, 5, 3)),
+      );
+
+      await database.deleteTransaction('s3');
+      await database.purgeTransaction('s3');
+
+      expect(await database.getTransactions(includeDeleted: true), isEmpty);
+    });
+
+    test('les notes et l’état survivent à une mise à jour', () async {
+      await database.insertTransaction(
+        _transaction(id: 's4', amount: 10, date: DateTime(2026, 5, 3)),
+      );
+
+      await database.updateTransaction(
+        _transaction(id: 's4', amount: 25, date: DateTime(2026, 5, 3))
+            .copyWith(notes: 'Ajustement'),
+      );
+
+      final all = await database.getTransactions();
+
+      expect(all.single.amount, 25);
+      expect(all.single.notes, 'Ajustement');
+      expect(all.single.isDeleted, isFalse);
+    });
+
+    test('une transaction supprimée reste exclue des totaux', () async {
+      await database.insertTransaction(
+        _transaction(
+          id: 't1',
+          amount: 100,
+          date: DateTime(2026, 6, 1),
+          type: TransactionType.expense,
+        ),
+      );
+
+      await database.deleteTransaction('t1');
+
+      final summary = await FinanceService.getSummaryForMonth(
+        DateTime(2026, 6),
+      );
+
+      expect(summary.expenses, 0);
+      expect(summary.balance, 0);
+      expect(summary.allTransactions, isEmpty);
+    });
+  });
+
   group('FinanceService.getSummaryForMonth', () {
     test('ignore les transactions des autres mois', () async {
       await database.insertTransaction(
