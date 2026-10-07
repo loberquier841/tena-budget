@@ -1,5 +1,5 @@
 
-import { db, SyncQueueItem, ConflictLog } from "./dexie";
+import { getLocalConflict, getLocalConflicts, getLocalSyncQueue, putLocalConflict, putLocalSyncQueueItem, removeLocalSyncQueueItem, SyncQueueItem, ConflictLog, updateLocalConflict, updateLocalEntitySyncStatus, updateLocalSyncQueueAttempts } from "./dexie";
 
 // Synchronisation Dexie ↔ serveur - ne jamais perdre silencieusement une donnée
 
@@ -10,7 +10,7 @@ export interface SyncResult {
 }
 
 export async function syncWithServer(familyId: string, serverFetch: (item: SyncQueueItem) => Promise<{ success: boolean; serverVersion?: any; conflict?: boolean }>): Promise<SyncResult> {
-  const queue = await db.syncQueue.where('familyId').equals(familyId).toArray();
+  const queue = await getLocalSyncQueue(familyId);
   let synced = 0;
   const conflicts: ConflictLog[] = [];
   const failed: SyncQueueItem[] = [];
@@ -19,10 +19,14 @@ export async function syncWithServer(familyId: string, serverFetch: (item: SyncQ
     try {
       const result = await serverFetch(item);
       if (result.success) {
-        await db.syncQueue.delete(item.id);
+        await removeLocalSyncQueueItem(item.id);
         // Marque synced
         if (item.entity === 'transaction') {
-          await db.transactions.update(item.entityId, { syncStatus: 'synced' as const });
+          await updateLocalEntitySyncStatus(item.entity, item.entityId, 'synced');
+        } else if (item.entity === 'savingGoal') {
+          await updateLocalEntitySyncStatus(item.entity, item.entityId, 'synced');
+        } else if (item.entity === 'savingContribution') {
+          await updateLocalEntitySyncStatus(item.entity, item.entityId, 'synced');
         }
         synced++;
       } else if (result.conflict) {
@@ -36,19 +40,23 @@ export async function syncWithServer(familyId: string, serverFetch: (item: SyncQ
           serverVersion: result.serverVersion,
           resolution: 'pending',
         };
-        await db.conflicts.add(conflict);
+        await putLocalConflict(conflict);
         conflicts.push(conflict);
         // Marque conflict
         if (item.entity === 'transaction') {
-          await db.transactions.update(item.entityId, { syncStatus: 'conflict' as const });
+          await updateLocalEntitySyncStatus(item.entity, item.entityId, 'conflict');
+        } else if (item.entity === 'savingGoal') {
+          await updateLocalEntitySyncStatus(item.entity, item.entityId, 'conflict');
+        } else if (item.entity === 'savingContribution') {
+          await updateLocalEntitySyncStatus(item.entity, item.entityId, 'conflict');
         }
       } else {
         // Échec temporaire
-        await db.syncQueue.update(item.id, { attempts: item.attempts + 1 });
+        await updateLocalSyncQueueAttempts(item.id, item.attempts + 1);
         failed.push(item);
       }
     } catch (e) {
-      await db.syncQueue.update(item.id, { attempts: item.attempts + 1 });
+      await updateLocalSyncQueueAttempts(item.id, item.attempts + 1);
       failed.push(item);
     }
   }
@@ -57,13 +65,13 @@ export async function syncWithServer(familyId: string, serverFetch: (item: SyncQ
 }
 
 export async function resolveConflict(conflictId: string, resolution: 'local_wins' | 'server_wins' | 'manual', manualData?: any): Promise<void> {
-  const conflict = await db.conflicts.get(conflictId);
+  const conflict = await getLocalConflict(conflictId);
   if (!conflict) throw new Error("CONFLICT_NOT_FOUND");
   // Conserve trace même après résolution
-  await db.conflicts.update(conflictId, { resolution, resolvedAt: new Date(), localVersion: manualData || conflict.localVersion });
+  await updateLocalConflict({ ...conflict, resolution, resolvedAt: new Date(), localVersion: manualData || conflict.localVersion });
   if (resolution === 'local_wins') {
     // Re-queue local version
-    await db.syncQueue.add({
+    await putLocalSyncQueueItem({
       id: `sync_${Date.now()}`,
       familyId: conflict.familyId,
       entity: conflict.entity as any,
@@ -78,9 +86,9 @@ export async function resolveConflict(conflictId: string, resolution: 'local_win
 }
 
 export async function getPendingSyncCount(familyId: string): Promise<number> {
-  return db.syncQueue.where('familyId').equals(familyId).count();
+  return (await getLocalSyncQueue(familyId)).length;
 }
 
 export async function getConflicts(familyId: string): Promise<ConflictLog[]> {
-  return db.conflicts.where('familyId').equals(familyId).filter(c => c.resolution === 'pending').toArray();
+  return (await getLocalConflicts(familyId)).filter(c => c.resolution === 'pending');
 }

@@ -1,6 +1,8 @@
 
 # TENΛ Budget - Roadmap 23 Etapes Minimum - Correction officielle
 
+> Cette roadmap est un ancien inventaire technique. La référence produit et la priorité actuelles sont dans [BRIEF_PRODUIT_REFERENCE.md](BRIEF_PRODUIT_REFERENCE.md); elle prévaut en cas de contradiction. Une étape historique dite « préparée » n'est pas une preuve de fonctionnement ou de déploiement.
+
 Roadmap officielle fixee a 23 etapes minimum (au lieu de 27). Anciennes etapes 21-27 regroupees intelligemment dans Etapes 21,22,23 sans supprimer aucune fonctionnalite.
 
 ## Roadmap 23 etapes

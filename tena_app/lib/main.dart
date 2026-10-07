@@ -5,6 +5,7 @@ import 'pages/categories_page.dart';
 import 'pages/budget_page.dart';
 import 'pages/goals_page.dart';
 import 'pages/forecast_page.dart';
+import 'pages/profile_page.dart';
 import 'models/finance_summary.dart';
 import 'widgets/finance_chart.dart';
 
@@ -17,6 +18,7 @@ import 'services/budget_service.dart';
 import 'services/finance_service.dart';
 import 'services/goal_service.dart';
 import 'services/notification_service.dart';
+import 'services/payment_service.dart';
 import 'services/secure_key_store.dart';
 import 'state/period_state.dart';
 import 'theme/tena_app_theme.dart';
@@ -36,6 +38,10 @@ Future<void> main() async {
       fallback: PreferencesKeyStore(SharedPreferences.getInstance),
     ),
   );
+
+  // L'état de paiement doit être connu avant le premier rendu : sans lui,
+  // l'écran afficherait la page principale puis le paywall (flash).
+  await PaymentService.instance.load();
 
   runApp(const TenaBudgetApp());
 }
@@ -89,10 +95,7 @@ class _TenaHomeState extends State<TenaHome> {
       icon: Icons.account_balance_wallet_outlined,
       activeIcon: Icons.account_balance_wallet_rounded,
     ),
-    TenaNavItem(
-      title: 'Transactions',
-      icon: Icons.swap_vert_rounded,
-    ),
+    TenaNavItem(title: 'Transactions', icon: Icons.swap_vert_rounded),
     TenaNavItem(
       title: 'Catégories',
       icon: Icons.category_outlined,
@@ -121,6 +124,7 @@ class _TenaHomeState extends State<TenaHome> {
     TenaNavItem(title: 'Entreprise', icon: Icons.business_outlined),
     TenaNavItem(title: 'Autopilot', icon: Icons.bolt_rounded),
     TenaNavItem(title: 'Paramètres', icon: Icons.settings_outlined),
+    TenaNavItem(title: 'Mon profil', icon: Icons.person_outline_rounded),
   ];
 
   @override
@@ -178,8 +182,7 @@ class _TenaHomeState extends State<TenaHome> {
                   leading: IconButton(
                     icon: const Icon(Icons.menu_rounded),
                     tooltip: 'Navigation',
-                    onPressed: () =>
-                        _scaffoldKey.currentState?.openDrawer(),
+                    onPressed: () => _scaffoldKey.currentState?.openDrawer(),
                   ),
                   title: Text(
                     current.title,
@@ -218,6 +221,9 @@ class _TenaHomeState extends State<TenaHome> {
   }
 
   Widget _buildPage(TenaNavItem page) {
+    if (page.title == 'Mon profil') {
+      return const ProfilePage();
+    }
     if (selectedIndex == 0) {
       return DashboardPage(period: _period, onNavigate: _goToPage);
     }
@@ -301,14 +307,16 @@ class _DashboardPageState extends State<DashboardPage> {
     // Le budget global est injecté dans le tableau de bord : il sert à la
     // carte « Budget global » et aux alertes, et doit donc refléter la
     // dernière valeur enregistrée dans le module Budget.
-    BudgetService.getGlobalBudget().then((value) {
-      if (!mounted) return;
+    BudgetService.getGlobalBudget()
+        .then((value) {
+          if (!mounted) return;
 
-      setState(() => _DashboardBudget.lastKnown = value);
-    }).catchError((_) {
-      // Un budget illisible ne doit pas empêcher l'affichage du tableau de
-      // bord : la carte indiquera « Aucun budget défini ».
-    });
+          setState(() => _DashboardBudget.lastKnown = value);
+        })
+        .catchError((_) {
+          // Un budget illisible ne doit pas empêcher l'affichage du tableau de
+          // bord : la carte indiquera « Aucun budget défini ».
+        });
   }
 
   void _changeMonth(int amount) {
@@ -382,7 +390,6 @@ class _DashboardPageState extends State<DashboardPage> {
       ],
     );
   }
-
 
   Widget _monthSelector(BuildContext context) {
     return TenaCard(
@@ -619,10 +626,11 @@ class _DashboardPageState extends State<DashboardPage> {
                         vertical: 3,
                       ),
                       decoration: BoxDecoration(
-                        color: (isPositive
-                                ? TenaColors.success
-                                : TenaColors.danger)
-                            .withValues(alpha: 0.14),
+                        color:
+                            (isPositive
+                                    ? TenaColors.success
+                                    : TenaColors.danger)
+                                .withValues(alpha: 0.14),
                         borderRadius: TenaRadius.sm,
                       ),
                       child: Row(
@@ -838,10 +846,7 @@ class _DashboardPageState extends State<DashboardPage> {
       children: [
         const Text('Bonjour 👋', style: TenaLabels.title),
         const SizedBox(height: TenaSpacing.xs),
-        Text(
-          'Voici la situation de ton budget.',
-          style: TenaLabels.subtitle,
-        ),
+        Text('Voici la situation de ton budget.', style: TenaLabels.subtitle),
       ],
     );
 
@@ -942,9 +947,7 @@ class _DashboardPageState extends State<DashboardPage> {
             TenaStatCard(
               width: cardWidth,
               label: 'Budget global',
-              value: budget.hasBudget
-                  ? tenaMoney(budget.remaining)
-                  : '—',
+              value: budget.hasBudget ? tenaMoney(budget.remaining) : '—',
               icon: Icons.account_balance_wallet_outlined,
               valueColor: budget.overBudget
                   ? TenaColors.danger
@@ -957,7 +960,6 @@ class _DashboardPageState extends State<DashboardPage> {
       },
     );
   }
-
 
   /// Zone d'alertes intelligentes.
   ///
@@ -1057,10 +1059,7 @@ class _DashboardPageState extends State<DashboardPage> {
               const Expanded(
                 child: Text(
                   'Revenus et dépenses',
-                  style: TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w700,
-                  ),
+                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
                 ),
               ),
               if (hasData)
@@ -1128,7 +1127,6 @@ class _DashboardPageState extends State<DashboardPage> {
     );
   }
 
-
   /// Section « Objectifs » : aperçu des objectifs en cours.
   ///
   /// Les données proviennent de [GoalService] : aucun objectif n'est
@@ -1140,8 +1138,7 @@ class _DashboardPageState extends State<DashboardPage> {
       icon: Icons.track_changes_outlined,
       emptyIcon: Icons.track_changes_outlined,
       emptyTitle: 'Aucun objectif',
-      emptyMessage:
-          'Crée un objectif pour suivre ton épargne mois après mois.',
+      emptyMessage: 'Crée un objectif pour suivre ton épargne mois après mois.',
       emptyActionLabel: 'Créer un objectif',
       onEmptyAction: () => widget.onNavigate(4),
       builder: (context, goals) {
@@ -1157,21 +1154,20 @@ class _DashboardPageState extends State<DashboardPage> {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              'OBJECTIFS',
-              style: TenaLabels.overline,
-            ),
+            const Text('OBJECTIFS', style: TenaLabels.overline),
             const SizedBox(height: TenaSpacing.md),
-            ...goals.take(3).map(
-              (goal) => Padding(
-                padding: const EdgeInsets.only(bottom: TenaSpacing.md),
-                child: _GoalPreviewRow(
-                  name: goal.name,
-                  saved: goal.saved,
-                  target: goal.target,
+            ...goals
+                .take(3)
+                .map(
+                  (goal) => Padding(
+                    padding: const EdgeInsets.only(bottom: TenaSpacing.md),
+                    child: _GoalPreviewRow(
+                      name: goal.name,
+                      saved: goal.saved,
+                      target: goal.target,
+                    ),
+                  ),
                 ),
-              ),
-            ),
             if (goals.length > 3)
               TextButton.icon(
                 onPressed: () => widget.onNavigate(4),
@@ -1195,10 +1191,7 @@ class _DashboardPageState extends State<DashboardPage> {
           Row(
             children: [
               const Expanded(
-                child: Text(
-                  'ACTIVITÉ RÉCENTE',
-                  style: TenaLabels.overline,
-                ),
+                child: Text('ACTIVITÉ RÉCENTE', style: TenaLabels.overline),
               ),
               if (transactions.isNotEmpty)
                 TextButton(
@@ -1253,10 +1246,7 @@ class _DashboardBudget {
   static double lastKnown = 0;
 
   static _DashboardBudget of(FinanceSummary summary) {
-    return _DashboardBudget(
-      budget: lastKnown,
-      expenses: summary.expenses,
-    );
+    return _DashboardBudget(budget: lastKnown, expenses: summary.expenses);
   }
 
   bool get hasBudget => budget > 0;
@@ -1414,9 +1404,7 @@ class _GoalPreviewRow extends StatelessWidget {
               style: TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w600,
-                color: reached
-                    ? TenaColors.success
-                    : TenaColors.textSecondary,
+                color: reached ? TenaColors.success : TenaColors.textSecondary,
               ),
             ),
           ],
@@ -1451,7 +1439,6 @@ class _TransactionRow extends StatelessWidget {
     );
   }
 }
-
 
 ///
 /// Isolé pour que les deux flèches partagent exactement le même rendu et la
@@ -1541,8 +1528,6 @@ class _OverviewMiniStat extends StatelessWidget {
     );
   }
 }
-
-
 
 class _DailyTotals {
   double income = 0;

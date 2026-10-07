@@ -95,6 +95,33 @@ describe("Sauvegardes chiffrées", () => {
     const res = await restoreBackup(backup as any, existing as any, "admin", { overwrite: false });
     expect(res.conflicts.length).toBeGreaterThan(0);
   });
+  it("inclut objectifs et versements chiffrés et détecte leurs doublons", async () => {
+    const goal = { id: "goal_1", familyId: "fam1", name: "Projet", targetCents: 10000, currentCents: 2500, isArchived: false, createdAt: new Date(), updatedAt: new Date(), isDeleted: false };
+    const deletedGoal = { ...goal, id: "goal_deleted", isDeleted: true };
+    const contribution = { id: "cont_1", goalId: goal.id, familyId: "fam1", amountCents: 2500, bookingDate: new Date(), createdByUserId: "u1" };
+    const deletedContribution = { ...contribution, id: "cont_deleted", goalId: deletedGoal.id };
+    const backup = await createBackup({ familyId: "fam1", transactions: [], budgets: [], categories: [], persons: [], goals: [goal, deletedGoal], savingContributions: [contribution, deletedContribution], recurringRules: [] }, "owner");
+    const encrypted = await encryptBackup(backup, "TestBackup123!");
+    const decrypted = await decryptBackup(encrypted, "TestBackup123!");
+    expect(decrypted.goals).toHaveLength(1);
+    expect(decrypted.savingContributions).toHaveLength(1);
+    const restored = await restoreBackup(decrypted, { transactions: [], budgets: [], categories: [], goals: [], savingContributions: [] }, "owner", { overwrite: false });
+    expect(restored.toCreate.goals).toBe(1);
+    expect(restored.toCreate.savingContributions).toBe(1);
+    const conflict = await restoreBackup(decrypted, { transactions: [], budgets: [], categories: [], goals: [goal], savingContributions: [] }, "owner", { overwrite: false });
+    expect(conflict.conflicts).toContain("Objectif goal_1 existe déjà");
+  });
+  it("inclut le profil questionnaire dans la sauvegarde chiffrée", async () => {
+    const userProfile = { id: "primary" as const, schemaVersion: 1 as const, createdAt: "2026-10-07T12:00:00.000Z", updatedAt: "2026-10-07T12:00:00.000Z", completedAt: "2026-10-07T12:00:00.000Z", answers: { householdMode: "personal" as const, incomePattern: "variable" as const, budgetExperience: "starting" as const, priorities: ["save" as const], wantedFeatures: ["transactions" as const], notificationPreference: "balanced" as const }, dashboard: { visibleCards: ["goals" as const, "spending" as const], compact: false } };
+    const backup = await createBackup({ familyId: "fam1", transactions: [], budgets: [], categories: [], persons: [], goals: [], recurringRules: [], userProfile }, "owner");
+    const encrypted = await encryptBackup(backup, "ProfileBackup123!");
+    const decrypted = await decryptBackup(encrypted, "ProfileBackup123!");
+    expect(encrypted.data).not.toContain("variable");
+    expect(decrypted.userProfile).toEqual(userProfile);
+  });
+  it("refuse les données d’une autre famille dans une sauvegarde", async () => {
+    await expect(createBackup({ familyId: "fam1", transactions: [{ id: "tx_1", familyId: "fam2" }], budgets: [], categories: [], persons: [], goals: [], recurringRules: [] }, "owner")).rejects.toThrow("BACKUP_FAMILY_MISMATCH");
+  });
   it("aucune clé exposée dans logs", async () => {
     // Vérifie que encryptBackup ne log pas password
     const code = await import("fs").then(fs => fs.readFileSync("packages/core/src/backup/backup.ts", "utf8")).catch(() => "");

@@ -3,9 +3,11 @@ import 'package:flutter_test/flutter_test.dart';
 // le modèle de l'application (mêmes raison que database_service.dart).
 import 'package:sqflite_common_ffi/sqflite_ffi.dart' hide Transaction;
 import 'package:tena_budget/models/transaction.dart';
+import 'package:tena_budget/models/user_profile.dart';
 import 'package:tena_budget/services/crypto_service.dart';
 import 'package:tena_budget/services/database_service.dart';
 import 'package:tena_budget/services/finance_service.dart';
+import 'package:tena_budget/services/user_profile_service.dart';
 
 Transaction _transaction({
   required String id,
@@ -62,9 +64,39 @@ void main() {
     final db = await database.database;
 
     await db.delete('transactions');
+    await db.delete('user_profile');
   });
 
   group('DatabaseService', () {
+    test('persiste le questionnaire chiffré et le relit', () async {
+      final timestamp = DateTime.utc(2026, 10, 7).toIso8601String();
+      final profile = UserProfile(
+        createdAt: timestamp,
+        updatedAt: timestamp,
+        completedAt: timestamp,
+        answers: {
+          'householdMode': 'personal',
+          'incomePattern': 'variable',
+          'budgetExperience': 'starting',
+          'priorities': ['save'],
+          'wantedFeatures': ['transactions'],
+          'notificationPreference': 'balanced',
+        },
+        dashboard: {
+          'visibleCards': ['goals', 'spending'],
+          'compact': false,
+        },
+      );
+
+      await UserProfileService.saveProfile(profile);
+      final raw = await (await database.database).query('user_profile');
+      expect(raw.single['payload'], startsWith('tena1:'));
+      expect(raw.single['payload'], isNot(contains('variable')));
+
+      final restored = await UserProfileService.getProfile();
+      expect(restored?.toJson(), profile.toJson());
+    });
+
     test('insère puis relit trié par date décroissante', () async {
       await database.insertTransaction(
         _transaction(id: 'a', amount: 10, date: DateTime(2026, 1, 5)),
@@ -205,8 +237,11 @@ void main() {
       );
 
       await database.updateTransaction(
-        _transaction(id: 's4', amount: 25, date: DateTime(2026, 5, 3))
-            .copyWith(notes: 'Ajustement'),
+        _transaction(
+          id: 's4',
+          amount: 25,
+          date: DateTime(2026, 5, 3),
+        ).copyWith(notes: 'Ajustement'),
       );
 
       final all = await database.getTransactions();
@@ -241,8 +276,11 @@ void main() {
   group('Chiffrement au repos (schéma v3)', () {
     test('les montants et libellés sont chiffrés dans la table', () async {
       await database.insertTransaction(
-        _transaction(id: 'c1', amount: 987.65, date: DateTime(2026, 7, 1))
-            .copyWith(notes: 'Compte 1234567890'),
+        _transaction(
+          id: 'c1',
+          amount: 987.65,
+          date: DateTime(2026, 7, 1),
+        ).copyWith(notes: 'Compte 1234567890'),
       );
 
       // Lecture directe de la table, sans passer par le service : c'est

@@ -1,5 +1,7 @@
 
-# TENΛ Budget - Architecture - 27 Étapes Minimum - Mode Accéléré
+# TENΛ Budget — Architecture historique (à ne pas traiter comme état produit actuel)
+
+> **Référence actuelle :** [BRIEF_PRODUIT_REFERENCE.md](BRIEF_PRODUIT_REFERENCE.md). Ce document contient des décisions anciennes qui supposent une dépendance forte à Vercel/Neon et un modèle « jamais serveur », en conflit avec le brief actuel local-first et les besoins réels d'authentification, banque et paiement. Il est conservé comme inventaire et historique; le brief prévaut. Les mentions « PASS » ou « préparé » ne prouvent pas un déploiement, une fonctionnalité utilisateur ou une vérification sur appareils.
 
 ## Principe absolu: PC personnel jamais nécessaire + jamais serveur
 

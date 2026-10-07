@@ -31,10 +31,9 @@ class DatabaseService {
   ///
   /// v1 : id, amount, category, description, date, type
   /// v2 : notes, is_deleted (suppression logique) et index sur la date
-  /// v3 : chiffrement AES-GCM des champs sensibles (montant, description,
-  ///      note). La catégorie reste en clair : elle sert de clé de regroupement
-  ///      et n'est pas à elle seule une donnée financière.
-  static const int _schemaVersion = 3;
+  /// v3 : chiffrement AES-GCM des transactions existantes.
+  /// v4 : profil/questionnaire local chiffré; migration additive.
+  static const int _schemaVersion = 4;
 
   Future<Database> _initDatabase() async {
     if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
@@ -62,6 +61,10 @@ class DatabaseService {
           await _migrateToV3(db);
         }
 
+        if (oldVersion < 4) {
+          await _createUserProfileSchema(db);
+        }
+
         await _createIndexes(db);
       },
     );
@@ -83,6 +86,16 @@ class DatabaseService {
     ''');
 
     await _createIndexes(db);
+    await _createUserProfileSchema(db);
+  }
+
+  Future<void> _createUserProfileSchema(Database db) async {
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS user_profile (
+        id TEXT PRIMARY KEY,
+        payload TEXT NOT NULL
+      )
+    ''');
   }
 
   /// Migration v1 -> v2 : note libre, suppression logique, index sur la date.
@@ -170,6 +183,27 @@ class DatabaseService {
     );
   }
 
+  /// Enregistre le JSON versionné du profil sous forme chiffrée AES-GCM.
+  Future<void> saveUserProfilePayload(String jsonPayload) async {
+    final db = await database;
+    await db.insert('user_profile', {
+      'id': 'primary',
+      'payload': await CryptoService.encrypt(jsonPayload),
+    }, conflictAlgorithm: ConflictAlgorithm.replace);
+  }
+
+  Future<String?> getUserProfilePayload() async {
+    final db = await database;
+    final rows = await db.query(
+      'user_profile',
+      where: 'id = ?',
+      whereArgs: ['primary'],
+      limit: 1,
+    );
+    if (rows.isEmpty) return null;
+    return CryptoService.decrypt(rows.single['payload'] as String);
+  }
+
   Future<void> updateTransaction(model.Transaction transaction) async {
     final db = await database;
 
@@ -211,11 +245,7 @@ class DatabaseService {
   Future<void> purgeTransaction(String id) async {
     final db = await database;
 
-    await db.delete(
-      'transactions',
-      where: 'id = ?',
-      whereArgs: [id],
-    );
+    await db.delete('transactions', where: 'id = ?', whereArgs: [id]);
   }
 
   /// Les transactions supprimées sont exclues par défaut afin qu'elles ne

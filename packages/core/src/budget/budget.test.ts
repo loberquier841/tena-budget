@@ -2,7 +2,7 @@
 import { describe, it, expect } from "vitest";
 import { createCategory, archiveCategory } from "./category";
 import { createBudget, calculateRemaining, validateBudgetAmount } from "./budget";
-import { createTransaction, softDeleteTransaction, validateTransactionAmount } from "./transaction";
+import { createTransaction, restoreTransaction, softDeleteTransaction, validateTransactionAmount } from "./transaction";
 import { filterTransactions, searchTransactions } from "./search";
 import { createSimulationScenario, createSimulationTransaction, assertSimulationIsolation } from "./simulation";
 import { can } from "../permissions/permissions";
@@ -86,6 +86,16 @@ describe("Transactions liées à personne, soft delete", () => {
     // Vérifie pas de suppression physique
     const list = [deleted];
     expect(list.some(t => t.id === tx.id)).toBe(true);
+  });
+  it("restaure une transaction supprimée sans créer de doublon", () => {
+    const tx = createTransaction({ familyId: "fam1", amountCents: 1000, bookingDate: new Date(), label: "Test", source: "manual", personId: "p1", createdByUserId: "u1" }, "owner");
+    const deleted = softDeleteTransaction(tx, "owner");
+    const restored = restoreTransaction(deleted, "fam1", "owner");
+    expect(restored.id).toBe(tx.id);
+    expect(restored.isDeleted).toBe(false);
+    expect(restored.deletedAt).toBeUndefined();
+    expect(() => restoreTransaction(tx, "fam1", "owner")).toThrow("TX_NOT_DELETED");
+    expect(() => restoreTransaction(deleted, "fam2", "owner")).toThrow("TX_FAMILY_MISMATCH");
   });
   it("seuil 500€ transaction nécessite owner", () => {
     expect(() => createTransaction({ familyId: "fam1", amountCents: 60000, bookingDate: new Date(), label: "Gros", source: "manual", personId: "p1", createdByUserId: "u1" }, "member")).toThrow("OWNER_CONFIRMATION");

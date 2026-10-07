@@ -84,6 +84,17 @@ export function softDeleteTransaction(tx: Transaction, role: Role): Transaction 
   return { ...tx, isDeleted: true, deletedAt: new Date(), updatedAt: new Date() };
 }
 
+export function restoreTransaction(tx: Transaction, familyId: string, role: Role): Transaction {
+  assertCan(role, "transaction:write");
+  if (tx.familyId !== familyId) throw new Error("TX_FAMILY_MISMATCH");
+  if (!tx.isDeleted) throw new Error("TX_NOT_DELETED");
+  if (requiresOwnerConfirmation(tx.amountCents) && role !== "owner") {
+    throw new Error("TX_RESTORE_REQUIRES_OWNER_CONFIRMATION: >500€");
+  }
+  const { deletedAt: _deletedAt, ...active } = tx;
+  return { ...active, isDeleted: false, updatedAt: new Date() };
+}
+
 // Vérifie qu'aucune suppression physique n'est possible via cette API
 export function assertNoPhysicalDelete(transactions: Transaction[], id: string): boolean {
   return transactions.some(t => t.id === id);
