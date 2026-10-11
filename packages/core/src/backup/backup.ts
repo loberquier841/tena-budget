@@ -3,6 +3,7 @@ import { Role, assertCan } from "../permissions/permissions";
 import type { UserProfile } from "../product/profile";
 
 // Sauvegardes chiffrées - Web Crypto API native (AES-GCM 256) - aucune clé exposée frontend/logs
+const BACKUP_PBKDF2_ITERATIONS = 310_000;
 
 export interface BackupData {
   version: string;
@@ -26,6 +27,7 @@ export interface EncryptedBackup {
   version: string;
   familyId: string;
   createdAt: string;
+  iterations?: number; // PBKDF2 iterations used for encryption
 }
 
 function bytesToBase64(bytes: Uint8Array): string {
@@ -79,14 +81,14 @@ export async function createBackup(input: { familyId: string; transactions: any[
 }
 
 export async function encryptBackup(backup: BackupData, password: string): Promise<EncryptedBackup> {
-  if (!password || password.length < 8) throw new Error("BACKUP_PASSWORD_MIN_8");
+  if (!password || password.length < 12) throw new Error("BACKUP_PASSWORD_MIN_12");
   const encoder = new TextEncoder();
   const salt = crypto.getRandomValues(new Uint8Array(16));
   const iv = crypto.getRandomValues(new Uint8Array(12));
 
   const keyMaterial = await crypto.subtle.importKey('raw', encoder.encode(password), { name: 'PBKDF2' }, false, ['deriveKey']);
   const key = await crypto.subtle.deriveKey(
-    { name: 'PBKDF2', salt, iterations: 100000, hash: 'SHA-256' },
+    { name: 'PBKDF2', salt, iterations: BACKUP_PBKDF2_ITERATIONS, hash: 'SHA-256' },
     keyMaterial,
     { name: 'AES-GCM', length: 256 },
     false,
@@ -103,6 +105,7 @@ export async function encryptBackup(backup: BackupData, password: string): Promi
     version: backup.version,
     familyId: backup.familyId,
     createdAt: backup.createdAt,
+    iterations: BACKUP_PBKDF2_ITERATIONS,
   };
 }
 
@@ -116,8 +119,9 @@ export async function decryptBackup(encrypted: EncryptedBackup, password: string
   const data = base64ToBytes(encrypted.data);
 
   const keyMaterial = await crypto.subtle.importKey('raw', encoder.encode(password), { name: 'PBKDF2' }, false, ['deriveKey']);
+  const iterations = encrypted.iterations ?? 100000;
   const key = await crypto.subtle.deriveKey(
-    { name: 'PBKDF2', salt, iterations: 100000, hash: 'SHA-256' },
+    { name: 'PBKDF2', salt, iterations, hash: 'SHA-256' },
     keyMaterial,
     { name: 'AES-GCM', length: 256 },
     false,

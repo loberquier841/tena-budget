@@ -7,36 +7,37 @@ class FinanceService {
     return DatabaseService.instance.getTransactions();
   }
 
-  static Future<FinanceSummary> getSummaryForMonth(
-    DateTime month,
-  ) async {
-    final transactions = await getTransactions();
+   static Future<FinanceSummary> getSummaryForMonth(
+     DateTime month,
+   ) async {
+     final startDate = DateTime(month.year, month.month, 1);
+     final endDate = month.month == 12
+         ? DateTime(month.year + 1, 1, 1)
+         : DateTime(month.year, month.month + 1, 1);
+     final transactions = await DatabaseService.instance.getTransactions(
+       startDate: startDate,
+       endDate: endDate,
+     );
 
-    final monthTransactions = transactions.where((transaction) {
-      return transaction.date.year == month.year &&
-          transaction.date.month == month.month;
-    }).toList();
+     double income = 0;
+     double expenses = 0;
 
-    double income = 0;
-    double expenses = 0;
+     for (final transaction in transactions) {
+       if (transaction.type == TransactionType.income) {
+         income += transaction.amount;
+       } else {
+         expenses += transaction.amount;
+       }
+     }
 
-    for (final transaction in monthTransactions) {
-      if (transaction.type == TransactionType.income) {
-        income += transaction.amount;
-      } else {
-        expenses += transaction.amount;
-      }
-    }
-
-    return FinanceSummary(
-      balance: income - expenses,
-      income: income,
-      expenses: expenses,
-      recentTransactions: monthTransactions.take(5).toList(),
-      allTransactions: monthTransactions,
-    );
-  }
-
+     return FinanceSummary(
+       balance: income - expenses,
+       income: income,
+       expenses: expenses,
+       recentTransactions: transactions.take(5).toList(),
+       allTransactions: transactions,
+     );
+   }
   static Future<FinanceSummary> getSummary() async {
     final transactions = await getTransactions();
 

@@ -6,6 +6,7 @@ import 'pages/budget_page.dart';
 import 'pages/goals_page.dart';
 import 'pages/forecast_page.dart';
 import 'pages/profile_page.dart';
+import 'pages/reports_page.dart';
 import 'models/finance_summary.dart';
 import 'widgets/finance_chart.dart';
 
@@ -246,6 +247,9 @@ class _TenaHomeState extends State<TenaHome> {
       return const ForecastPage();
     }
 
+    if (selectedIndex == 7) {
+      return const ReportsPage();
+    }
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(32),

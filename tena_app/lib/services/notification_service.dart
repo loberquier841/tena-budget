@@ -1,6 +1,8 @@
 import 'dart:convert';
 
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:tena_budget/services/crypto_service.dart';
+
 
 enum NotificationSeverity {
   info,
@@ -32,6 +34,12 @@ class BudgetNotification {
   /// Page à ouvrir dans la navigation principale.
   final int pageIndex;
 
+  /// Indique si la notification a été lue par l'utilisateur.
+  final bool isRead;
+
+  /// Date à laquelle la notification a été marquée comme lue.
+  final DateTime? readAt;
+
   const BudgetNotification({
     required this.id,
     required this.title,
@@ -39,6 +47,8 @@ class BudgetNotification {
     required this.severity,
     required this.createdAt,
     required this.pageIndex,
+    this.isRead = false,
+    this.readAt,
   });
 
   Map<String, dynamic> toJson() => {
@@ -48,6 +58,8 @@ class BudgetNotification {
     'severity': severity.name,
     'createdAt': createdAt.toIso8601String(),
     'pageIndex': pageIndex,
+    'isRead': isRead,
+    'readAt': readAt?.toIso8601String(),
   };
 
   factory BudgetNotification.fromJson(Map<String, dynamic> json) {
@@ -61,6 +73,10 @@ class BudgetNotification {
       ),
       createdAt: DateTime.parse(json['createdAt'] as String),
       pageIndex: json['pageIndex'] as int? ?? 0,
+      isRead: json['isRead'] as bool? ?? false,
+      readAt: json['readAt'] != null
+          ? DateTime.parse(json['readAt'] as String)
+          : null,
     );
   }
 }

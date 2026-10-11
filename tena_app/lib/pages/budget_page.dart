@@ -49,7 +49,15 @@ class _BudgetPageState extends State<BudgetPage> {
 
   Future<void> _load() async {
     final categories = await CategoryService.getCategories();
-    final transactions = await _database.getTransactions();
+    final startDate = DateTime(widget.month.year, widget.month.month, 1);
+    final endDate = widget.month.month == 12
+        ? DateTime(widget.month.year + 1, 1, 1)
+        : DateTime(widget.month.year, widget.month.month + 1, 1);
+    final transactions = await _database.getTransactions(
+      startDate: startDate,
+      endDate: endDate,
+      types: [TransactionType.expense],
+    );
     final globalBudget = await BudgetService.getGlobalBudget();
 
     final categoryBudgets = <String, double>{};

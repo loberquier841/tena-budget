@@ -252,23 +252,60 @@ class DatabaseService {
   /// remontent ni dans les totaux, ni dans le graphique.
   Future<List<model.Transaction>> getTransactions({
     bool includeDeleted = false,
+    DateTime? startDate,
+    DateTime? endDate,
+    List<String>? categories,
+    List<model.TransactionType>? types,
   }) async {
     final db = await database;
+    final whereBuffer = StringBuffer();
+    final whereArgs = <Object?>[];
 
+    if (!includeDeleted) {
+      whereBuffer.write('is_deleted = 0');
+    }
+
+    void _addWhere() {
+      if (whereBuffer.isNotEmpty) {
+        whereBuffer.write(' AND ');
+      }
+    }
+
+    if (startDate != null) {
+      _addWhere();
+      whereBuffer.write('date >= ?');
+      whereArgs.add(startDate.toIso8601String());
+    }
+    if (endDate != null) {
+      _addWhere();
+      whereBuffer.write('date < ?');
+      whereArgs.add(endDate.toIso8601String());
+    }
+    if (categories != null && categories.isNotEmpty) {
+      _addWhere();
+      whereBuffer.write('category IN (' +
+          List.filled(categories.length, '?').join(', ') + ')');
+      whereArgs.addAll(categories);
+    }
+    if (types != null && types.isNotEmpty) {
+      _addWhere();
+      whereBuffer.write('type IN (' +
+          List.filled(types.length, '?').join(', ') + ')');
+      whereArgs.addAll(types.map((e) => e.name));
+    }
+
+    final whereClause = whereBuffer.toString();
     final rows = await db.query(
       'transactions',
-      where: includeDeleted ? null : 'is_deleted = 0',
+      where: whereClause.isEmpty ? null : whereClause,
+      whereArgs: whereArgs.isEmpty ? null : whereArgs,
       orderBy: 'date DESC',
     );
 
-    // `_toTransaction` déchiffre chaque ligne : le déchiffrement est asynchrone,
-    // la liste est donc construite champ par champ.
     final transactions = <model.Transaction>[];
-
     for (final row in rows) {
       transactions.add(await _toTransaction(row));
     }
-
     return transactions;
   }
 }

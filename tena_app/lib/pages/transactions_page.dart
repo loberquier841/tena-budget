@@ -44,6 +44,7 @@ class _TransactionsPageState extends State<TransactionsPage> {
   Future<void> _loadTransactions() async {
     final transactions = await _database.getTransactions(
       includeDeleted: _showDeleted,
+      types: _filterType != null ? [_filterType!] : null,
     );
 
     if (!mounted) return;

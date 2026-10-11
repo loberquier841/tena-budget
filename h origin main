@@ -1,0 +1,35 @@
+[33mcc742ba[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m)[m Build local-first profile onboarding and encrypted vault
+ README.md                                               |   9 [32m+[m[31m-[m
+ apps/mobile/src/App.tsx                                 | 734 [32m++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++[m[31m--------------[m
+ apps/web/public/sw.js                                   |   2 [32m+[m[31m-[m
+ docs/20_ETAPES_ROADMAP_2.md                             |   2 [32m+[m
+ docs/ARCHITECTURE.md                                    |   4 [32m+[m[31m-[m
+ docs/BRIEF_PRODUIT_REFERENCE.md                         |  94 [32m++++++++++++[m
+ packages/core/src/backup/backup.ts                      |  74 [32m++++++++[m[31m--[m
+ packages/core/src/backup/local.ts                       | 154 [32m++++++++++++++++++++[m
+ packages/core/src/budget/budget.test.ts                 |  12 [32m+[m[31m-[m
+ packages/core/src/budget/transaction.ts                 |  11 [32m++[m
+ packages/core/src/index.ts                              |   1 [32m+[m
+ packages/core/src/localVault.test.ts                    |  91 [32m++++++++++++[m
+ packages/core/src/localVault.ts                         | 114 [32m+++++++++++++++[m
+ packages/core/src/product/profile.test.ts               |  44 [32m++++++[m
+ packages/core/src/product/profile.ts                    | 137 [32m++++++++++++++++++[m
+ packages/core/src/simulation/step7.test.ts              |  27 [32m++++[m
+ packages/core/src/sync/dexie.ts                         | 366 [32m++++++++++++++++++++++++++++++++++++++++++++++[m[31m-[m
+ packages/core/src/sync/sync.ts                          |  34 [32m+++[m[31m--[m
+ tena_app/lib/main.dart                                  | 107 [32m++++++[m[31m--------[m
+ tena_app/lib/models/user_profile.dart                   |  49 [32m+++++++[m
+ tena_app/lib/pages/paywall_page.dart                    | 380 [32m+++++++++++++++++++++++++++++++++++++++++++++++++[m
+ tena_app/lib/pages/profile_page.dart                    | 334 [32m+++++++++++++++++++++++++++++++++++++++++++[m
+ tena_app/lib/services/database_service.dart             |  48 [32m+++++[m[31m--[m
+ tena_app/lib/services/payment_service.dart              | 244 [32m+++++++++++++++++++++++++++++++[m
+ tena_app/lib/services/user_profile_service.dart         |  27 [32m++++[m
+ tena_app/linux/flutter/generated_plugin_registrant.cc   |   4 [32m+[m
+ tena_app/linux/flutter/generated_plugins.cmake          |   1 [32m+[m
+ tena_app/macos/Flutter/GeneratedPluginRegistrant.swift  |   2 [32m+[m
+ tena_app/pubspec.lock                                   |  64 [32m+++++++++[m
+ tena_app/pubspec.yaml                                   |   1 [32m+[m
+ tena_app/test/services/finance_service_test.dart        |  46 [32m+++++[m[31m-[m
+ tena_app/windows/flutter/generated_plugin_registrant.cc |   3 [32m+[m
+ tena_app/windows/flutter/generated_plugins.cmake        |   1 [32m+[m
+ 33 files changed, 3004 insertions(+), 217 deletions(-)

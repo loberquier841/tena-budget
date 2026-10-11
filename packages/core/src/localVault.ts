@@ -4,6 +4,14 @@ const KDF_ITERATIONS = 310_000;
 const ENCRYPTED_PREFIX = "tena:v1:";
 const CHECK_TEXT = "TENΛ Budget local vault key check v1";
 
+// Delay constants for failed unlock attempts (in ms)
+const FAILED_ATTEMPT_BASE_DELAY = 1000; // 1 second
+const FAILED_ATTEMPT_MAX_DELAY = 30000; // 30 seconds
+
+function sleep(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
 export interface LocalVaultMetadata {
   id: "primary";
   version: 1;
@@ -14,6 +22,8 @@ export interface LocalVaultMetadata {
   checkCiphertext: string;
   createdAt: Date;
   migrationState: "pending" | "complete";
+  failedAttempts?: number;
+  lastFailedAttempt?: number;
 }
 
 let activeKey: CryptoKey | undefined;
@@ -63,7 +73,12 @@ export async function createLocalVault(passphrase: string): Promise<{ metadata: 
     metadata: {
       id: "primary", version: 1, kdf: "PBKDF2-SHA-256", iterations: KDF_ITERATIONS,
       salt: toBase64(salt), checkIv: toBase64(checkIv), checkCiphertext: toBase64(new Uint8Array(checkCiphertext)),
+       failedAttempts: 0,
+       lastFailedAttempt: 0,
       createdAt: new Date(), migrationState: "pending",
+       failedAttempts: 0,
+       lastFailedAttempt: 0,
+       failedAttempts: 0,
     },
   };
 }
