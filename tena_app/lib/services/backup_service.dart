@@ -167,9 +167,9 @@ class BackupService {
     final cipherBytes = secretBox.concatenation(); // nonce || ciphertext || mac
 
     // 6. Build final output: marker + base64(salt + nonce + ciphertext + mac).
-    final Uint8List encryptedBytes = Uint8List.fromList(salt);
-    encryptedBytes.addAll(nonce);
-    encryptedBytes.addAll(cipherBytes);
+    List<int> encryptedBytesList = salt.toList();
+    encryptedBytesList.addAll(cipherBytes);
+    final Uint8List encryptedBytes = Uint8List.fromList(encryptedBytesList);
     final backupString =
         '$_backupMarkerV2${base64Encode(encryptedBytes)}';
     final backupBytes = utf8.encode(backupString);
@@ -463,7 +463,11 @@ class BackupService {
     final List<int> plainBytes;
     try {
       plainBytes = await aesGcm.decrypt(
-          SecretBox.fromConcatenation(nonceAndCipherBox, nonceLength: 12, macLength: 12),
+          SecretBox.fromConcatenation(
+              nonceAndCipherBox,
+              nonceLength: aesGcm.nonceLength,
+              macLength: aesGcm.macAlgorithm.macLength,
+          ),
           secretKey: secretKey);
     } catch (e) {
       throw BackupFileCorruptException('Failed to decrypt backup: $e');
@@ -585,9 +589,7 @@ class BackupService {
     );
     final cipherBytes = secretBox.concatenation();
 
-    final Uint8List encryptedBytes = Uint8List.fromList(salt);
-    encryptedBytes.addAll(nonce);
-    encryptedBytes.addAll(cipherBytes);
+    final Uint8List encryptedBytes = Uint8List.fromList(salt.toList()..addAll(cipherBytes));
     final backupString =
         '$_backupMarkerV2${base64Encode(encryptedBytes)}';
     final backupBytes = utf8.encode(backupString);
