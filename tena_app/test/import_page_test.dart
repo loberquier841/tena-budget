@@ -1,19 +1,19 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:tena_app/pages/import_page.dart';
+import 'package:tena_budget/pages/import_transactions_page.dart';
 
 void main() {
-  testWidgets('ImportPage displays file picker', (WidgetTester tester) async {
+  testWidgets('ImportTransactionsPage displays file picker', (WidgetTester tester) async {
     await tester.pumpWidget(const MaterialApp(
-      home: ImportPage(),
+      home: ImportTransactionsPage(),
     ));
     expect(find.text('Sélectionner un fichier CSV ou Excel'), findsOneWidget);
     expect(find.byType(ElevatedButton), findsOneWidget);
   });
 
-  testWidgets('ImportPage builds without error', (WidgetTester tester) async {
+  testWidgets('ImportTransactionsPage builds without error', (WidgetTester tester) async {
     await tester.pumpWidget(const MaterialApp(
-      home: ImportPage(),
+      home: ImportTransactionsPage(),
     ));
-    expect(find.byType(ImportPage), findsOneWidget);
+    expect(find.byType(ImportTransactionsPage), findsOneWidget);
   });
 }

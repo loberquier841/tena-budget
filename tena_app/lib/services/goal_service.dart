@@ -1,6 +1,8 @@
 import 'dart:convert';
 
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:tena_budget/services/notification_service_secure.dart';
+
 
 class Goal {
   final String id;
@@ -89,6 +91,7 @@ class GoalService {
     );
 
     await saveGoals(goals);
+    await NotificationService.updateNotifications();
   }
 
   static Future<void> updateGoal(Goal updatedGoal) async {
@@ -101,6 +104,7 @@ class GoalService {
     goals[index] = updatedGoal;
 
     await saveGoals(goals);
+    await NotificationService.updateNotifications();
   }
 
   static Future<void> deleteGoal(String id) async {
@@ -109,5 +113,6 @@ class GoalService {
     goals.removeWhere((goal) => goal.id == id);
 
     await saveGoals(goals);
+    await NotificationService.updateNotifications();
   }
 }

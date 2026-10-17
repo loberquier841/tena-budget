@@ -1,6 +1,7 @@
 import '../models/finance_summary.dart';
 import '../models/transaction.dart';
 import 'database_service.dart';
+import 'package:tena_budget/services/notification_service_secure.dart';
 
 class FinanceService {
   static Future<List<Transaction>> getTransactions() {

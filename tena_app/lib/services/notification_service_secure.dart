@@ -3,98 +3,14 @@ import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:tena_budget/services/crypto_service.dart';
 
-enum NotificationSeverity {
-  info,
-  warning,
-  critical;
+import 'package:tena_budget/services/budget_service.dart';
+import 'package:tena_budget/services/goal_service.dart';
+import 'package:tena_budget/services/finance_service.dart';
+import 'package:tena_budget/services/database_service.dart';
+import 'package:tena_budget/models/transaction.dart';
 
-  String get label {
-    switch (this) {
-      case NotificationSeverity.info:
-        return 'Info';
-      case NotificationSeverity.warning:
-        return 'Vigilance';
-      case NotificationSeverity.critical:
-        return 'Urgent';
-    }
-  }
-}
-
-/// Alerte produite par les règles de gestion.
-class BudgetNotification {
-  final String id;
-  final String title;
-  final String message;
-  final NotificationSeverity severity;
-  final DateTime createdAt;
-  final int pageIndex;
-  final bool isRead;
-  final DateTime? readAt;
-
-  const BudgetNotification({
-    required this.id,
-    required this.title,
-    required this.message,
-    required this.severity,
-    required this.createdAt,
-    required this.pageIndex,
-    this.isRead = false,
-    this.readAt,
-  });
-
-  Map<String, dynamic> toJson() => {
-    'id': id,
-    'title': title,
-    'message': message,
-    'severity': severity.name,
-    'createdAt': createdAt.toIso8601String(),
-    'pageIndex': pageIndex,
-    'isRead': isRead,
-    'readAt': readAt?.toIso8601String(),
-  };
-
-  factory BudgetNotification.fromJson(Map<String, dynamic> json) {
-    return BudgetNotification(
-      id: json['id'] as String,
-      title: json['title'] as String,
-      message: json['message'] as String,
-      severity: NotificationSeverity.values.firstWhere(
-        (s) => s.name == json['severity'],
-        orElse: () => NotificationSeverity.info,
-      ),
-      createdAt: DateTime.parse(json['createdAt'] as String),
-      pageIndex: json['pageIndex'] as int? ?? 0,
-      isRead: json['isRead'] as bool? ?? false,
-      readAt: json['readAt'] != null
-          ? DateTime.parse(json['readAt'] as String)
-          : null,
-    );
-  }
-
-  BudgetNotification copyWith({
-    String? id,
-    String? title,
-    String? message,
-    NotificationSeverity? severity,
-    DateTime? createdAt,
-    int? pageIndex,
-    bool? isRead,
-    DateTime? readAt,
-  }) {
-    return BudgetNotification(
-      id: id ?? this.id,
-      title: title ?? this.title,
-      message: message ?? this.message,
-      severity: severity ?? this.severity,
-      createdAt: createdAt ?? this.createdAt,
-      pageIndex: pageIndex ?? this.pageIndex,
-      isRead: isRead ?? this.isRead,
-      readAt: readAt ?? this.readAt,
-    );
-  }
-}
-
-/// Moteur de règles produisant les notifications d'application.
+import 'package:tena_budget/services/notification_service.dart';
+export 'package:tena_budget/services/notification_service.dart';
 class NotificationService {
   static const String _key = 'tena_budget_notifications';
   static const int _maxStored = 50;
@@ -251,6 +167,77 @@ class NotificationService {
   static Future<void> remove(String id) async {
     final notifications = await getNotifications();
     await _save(notifications.where((n) => n.id != id).toList());
+  }
+
+  static Future<Map<String, double>> _getCategoryBudgets() async {
+    final prefs = await _prefs();
+    final Map<String, double> spent = await _getSpentByCategory(DateTime.now());
+    final Map<String, double> budgets = <String, double>{};
+    for (final category in spent.keys) {
+      final budget = await BudgetService.getCategoryBudget(category);
+      if (budget > 0) {
+        budgets[category] = budget;
+      }
+    }
+    return budgets;
+  }
+
+  static Future<Map<String, double>> _getSpentByCategory(DateTime month) async {
+    final start = DateTime(month.year, month.month, 1);
+    final end = month.month == 12
+        ? DateTime(month.year + 1, 1, 1)
+        : DateTime(month.year, month.month + 1, 1);
+    final transactions = await DatabaseService.instance.getTransactions(
+      startDate: start,
+      endDate: end,
+    );
+    final Map<String, double> spent = <String, double>{};
+    for (final t in transactions) {
+      if (t.type == TransactionType.expense) {
+        spent[t.category] = (spent[t.category] ?? 0) + t.amount;
+      }
+    }
+    return spent;
+  }
+
+  static Future<void> updateNotifications() async {
+    final now = DateTime.now();
+    final month = DateTime(now.year, now.month, 1);
+    final finance = await FinanceService.getSummaryForMonth(month);
+    final spentByCategory = await _getSpentByCategory(month);
+    final budgetByCategory = await _getCategoryBudgets();
+    final goals = await GoalService.getGoals();
+
+    // Budget alerts
+    final budgetAlerts = NotificationRules.checkBudgets(
+      spentByCategory: spentByCategory,
+      budgetByCategory: budgetByCategory,
+      now: now,
+    );
+    for (final alert in budgetAlerts) {
+      await addNotification(alert);
+    }
+
+    // Negative balance alert
+    final balanceAlert = NotificationRules.checkNegativeBalance(
+      income: finance.income,
+      expenses: finance.expenses,
+      now: now,
+    );
+    for (final alert in balanceAlert) {
+      await addNotification(alert);
+    }
+
+    // Goal alerts
+    final goalAlerts = NotificationRules.checkGoals(
+      goals: goals
+          .map((g) => (name: g.name, target: g.target, saved: g.saved))
+          .toList(),
+      now: now,
+    );
+    for (final alert in goalAlerts) {
+      await addNotification(alert);
+    }
   }
 
   static String money(double value) {

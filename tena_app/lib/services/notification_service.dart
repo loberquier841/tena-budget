@@ -79,6 +79,28 @@ class BudgetNotification {
           : null,
     );
   }
+  BudgetNotification copyWith({
+    String? id,
+    String? title,
+    String? message,
+    NotificationSeverity? severity,
+    DateTime? createdAt,
+    int? pageIndex,
+    bool? isRead,
+    DateTime? readAt,
+  }) {
+    return BudgetNotification(
+      id: id ?? this.id,
+      title: title ?? this.title,
+      message: message ?? this.message,
+      severity: severity ?? this.severity,
+      createdAt: createdAt ?? this.createdAt,
+      pageIndex: pageIndex ?? this.pageIndex,
+      isRead: isRead ?? this.isRead,
+      readAt: readAt ?? this.readAt,
+    );
+  }
+
 }
 
 /// Moteur de règles produisant les notifications d'application.

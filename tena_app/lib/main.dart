@@ -27,6 +27,8 @@ import 'theme/tena_theme.dart';
 import 'widgets/tena_card.dart';
 import 'widgets/tena_future_section.dart';
 import 'widgets/tena_sidebar.dart';
+import 'models/user_profile.dart';
+import 'services/user_profile_service.dart';
 
 Future<void> main() async {
   // La clé maîtresse doit être résolue avant le premier accès à la base : la
@@ -128,6 +130,13 @@ class _TenaHomeState extends State<TenaHome> {
     TenaNavItem(title: 'Mon profil', icon: Icons.person_outline_rounded),
   ];
 
+late Future<UserProfile?> _profileFuture;
+
+@override
+void initState() {
+  super.initState();
+  _profileFuture = UserProfileService.getProfile();
+}
   @override
   void dispose() {
     _period.dispose();
@@ -157,6 +166,22 @@ class _TenaHomeState extends State<TenaHome> {
 
   @override
   Widget build(BuildContext context) {
+    return FutureBuilder<UserProfile?>(
+      future: _profileFuture,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState != ConnectionState.done) {
+          return const Scaffold(body: Center(child: CircularProgressIndicator()));
+        }
+        final profile = snapshot.data;
+        if (profile == null) {
+          return ProfilePage(
+            isOnboarding: true,
+            onSaved: () {
+              setState(() => _profileFuture = UserProfileService.getProfile());
+            },
+          );
+        }
+        // → Normal home UI (original build method body)
     final current = pages[selectedIndex];
 
     final sidebar = TenaSidebar(
@@ -217,6 +242,8 @@ class _TenaHomeState extends State<TenaHome> {
                 )
               : content,
         );
+      },
+    );
       },
     );
   }

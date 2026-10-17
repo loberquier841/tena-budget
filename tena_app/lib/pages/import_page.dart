@@ -6,6 +6,8 @@ import '../services/import_service.dart';
 import '../models/transaction.dart';
 import '../services/database_service.dart';
 
+import 'package:csv/csv.dart';
+import 'package:excel/excel.dart';
 class ImportPage extends StatefulWidget {
   const ImportPage({Key? key}) : super(key: key);
 
@@ -16,8 +18,28 @@ class ImportPage extends StatefulWidget {
 class _ImportPageState extends State<ImportPage> {
   bool _isLoading = false;
   String? _selectedFilePath;
-  ImportService.ImportResult? _importResult;
+  ImportResult? _importResult;
   int? _dateColIdx;
+  int? _amountColIdx;
+  int? _categoryColIdx;
+  int? _descriptionColIdx;
+  List<String> _headers = [];
+  List<List<dynamic>> _rawRows = [];
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Importer des transactions'),
+      ),
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : _selectedFilePath == null
+              ? _buildFilePicker()
+              : _buildImportPreview(),
+    );
+  }
+
   Widget _buildFilePicker() {
     return Padding(
       padding: const EdgeInsets.all(24.0),
@@ -33,21 +55,45 @@ class _ImportPageState extends State<ImportPage> {
               foregroundColor: Colors.black,
             ),
           ),
+          const SizedBox(height: 24),
+          if (_selectedFilePath != null)
+            Text(
+              'Fichier sélectionné: ${p.basename(_selectedFilePath!)}',
+              style: const TextStyle(fontSize: 16),
+            ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _pickFile() async {
     try {
-      FilePickerResult? result = await FilePicker.platform.pickFiles(
+      PlatformFile? result = await FilePicker.pickFile(
         type: FileType.custom,
         allowedExtensions: ['csv', 'xlsx', 'xls'],
       );
-      if (result != null && result.files.single.path != null) {
+      if (result != null && result.path != null) {
         setState(() {
-          _selectedFilePath = result.files.single.path;
+          _selectedFilePath = result.path;
           _importResult = null;
           _dateColIdx = null;
           _amountColIdx = null;
           _categoryColIdx = null;
           _descriptionColIdx = null;
           _headers = [];
+          _rawRows = [];
+        });
+        _analyzeFile();
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Erreur lors de la sélection du fichier: $e')),
+        );
+      }
+    }
+  }
+
   Future<void> _analyzeFile() async {
     if (_selectedFilePath == null) return;
     setState(() => _isLoading = true);
@@ -59,7 +105,7 @@ class _ImportPageState extends State<ImportPage> {
         final csvData = await file.readAsString();
         rows = const CsvToListConverter(
                 fieldDelimiter: ',',
-                eol: '\\n',
+                eol: '\n',
                 shouldParseNumbers: false)
             .convert(csvData);
       } else if (ext == '.xlsx' || ext == '.xls') {
@@ -91,52 +137,12 @@ class _ImportPageState extends State<ImportPage> {
       setState(() => _isLoading = false);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Erreur lors de l\'analyse du fichier: $e')),
+          SnackBar(content: Text('Erreur lors de l\\'analyse du fichier: $e')),
         );
       }
     }
   }
-          _rawRows = [];
-        });
-        _analyzeFile();
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Erreur lors de la sélection du fichier: $e')),
-        );
-      }
-    }
-  }
-          const SizedBox(height: 24),
-          if (_selectedFilePath != null)
-            Text(
-              'Fichier sélectionné: ${p.basename(_selectedFilePath!)}',
-              style: const TextStyle(fontSize: 16, color: Colors.amber),
-            ),
-        ],
-      ),
-    );
-  }
-  int? _amountColIdx;
-  int? _categoryColIdx;
-  int? _descriptionColIdx;
-  List<String> _headers = [];
-  List<List<dynamic>> _rawRows = [];
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Importer des transactions'),
-        backgroundColor: Colors.amber, // TENΛ Budget premium gold
-      ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator(color: Colors.amber))
-          : _selectedFilePath == null
-              ? _buildFilePicker()
-              : _buildImportPreview(),
-    );
   Widget _buildImportPreview() {
     return Column(
       children: [
@@ -146,12 +152,12 @@ class _ImportPageState extends State<ImportPage> {
             children: [
               const Text(
                 'Aperçu du fichier',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.amber),
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 8),
               DataTable(
                 columns: _headers
-                    .map((h) => DataColumn(label: Text(h, style: const TextStyle(color: Colors.amber))))
+                    .map((h) => DataColumn(label: Text(h)))
                     .toList(),
                 rows: _rawRows
                     .skip(1)
@@ -166,12 +172,12 @@ class _ImportPageState extends State<ImportPage> {
               if (_rawRows.length > 6)
                 const Text(
                   '... et ${_rawRows.length - 6} autres lignes',
-                  style: TextStyle(fontStyle: FontStyle.italic, color: Colors.amber),
+                  style: TextStyle(fontStyle: FontStyle.italic),
                 ),
               const SizedBox(height: 24),
               const Text(
                 'Mapping des colonnes',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.amber),
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 8),
               _buildMappingDropdown('Date', _headers, _dateColIdx, (idx) =>
@@ -189,7 +195,7 @@ class _ImportPageState extends State<ImportPage> {
               ElevatedButton.icon(
                 onPressed: _processImport,
                 icon: const Icon(Icons.preview),
-                label: const Text('Prévisualiser l\'import'),
+                label: const Text('Prévisualiser l\\'import'),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.amber,
                   foregroundColor: Colors.black,
@@ -216,67 +222,30 @@ class _ImportPageState extends State<ImportPage> {
       ],
     );
   }
-  Widget _buildMappingDropdown(
-      String label, List<String> items, int? selectedIndex, ValueChanged<int?> onChanged) {
-    return DropdownButtonFormField<int>(
+
+  Widget _buildMappingDropdown(String label, List<String> items, int? selectedIndex, ValueChanged<int?> onChanged) {
+    return DropdownButtonFormField<int?>(
       decoration: InputDecoration(
         labelText: label,
-        labelStyle: const TextStyle(color: Colors.amber),
-        enabledBorder: const OutlineInputBorder(
-          borderSide: BorderSide(color: Colors.amber),
-        ),
-        focusedBorder: const OutlineInputBorder(
-          borderSide: BorderSide(color: Colors.amber, width: 2.0),
-        ),
+        border: const OutlineInputBorder(),
       ),
       value: selectedIndex,
-      style: const TextStyle(color: Colors.amber),
-      dropdownColor: Colors.amber.shade50,
       items: items.asMap().entries.map((entry) {
-        return DropdownMenuItem<int>(
+        return DropdownMenuItem<int?>(
           value: entry.key,
-          child: Text(entry.value, style: const TextStyle(color: Colors.amber)),
+          child: Text(entry.value),
         );
       }).toList(),
       onChanged: onChanged,
+      validator: (value) {
+        if (value == null) {
+          return 'Sélectionnez une colonne';
+        }
+        return null;
+      },
     );
   }
-  Future<void> _processImport() async {
-    if (_dateColIdx == null ||
-        _amountColIdx == null ||
-        _categoryColIdx == null ||
-        _selectedFilePath == null) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Veuillez sélectionner toutes les colonnes requises')),
-        );
-      }
-      return;
-    }
-    setState(() => _isLoading = true);
-    try {
-      // Create a temporary CSV file with columns in the order: date, amount, category, description
-      final tempCsv = await _createMappedCsv();
-      final service = ImportService(
-        getExistingTransactions: () async =>
-            await DatabaseService.instance.getTransactions(),
-      );
-      final result = await service.importFile(tempCsv.path);
-      setState(() {
-        _isLoading = false;
-        _importResult = result;
-      });
-      // Delete the temporary file
-      await tempCsv.delete();
-    } catch (e) {
-      setState(() => _isLoading = false);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Erreur lors du traitement: $e')),
-        );
-      }
-    }
-  }
+
   Future<File> _createMappedCsv() async {
     final tempDir = await Directory.systemTemp.createTemp();
     final tempFile = File('${tempDir.path}/mapped_import.csv');
@@ -294,6 +263,7 @@ class _ImportPageState extends State<ImportPage> {
     await tempFile.writeAsString(buffer.toString());
     return tempFile;
   }
+
   Widget _buildImportResult() {
     if (_importResult == null) return const SizedBox.shrink();
     return Card(
@@ -342,6 +312,7 @@ class _ImportPageState extends State<ImportPage> {
       ),
     );
   }
+
   Future<void> _confirmImport() async {
     if (_importResult == null ||
         (_importResult!.validTransactions.isEmpty &&
@@ -388,11 +359,12 @@ class _ImportPageState extends State<ImportPage> {
       await _performImport();
     }
   }
+
   Future<void> _performImport() async {
     setState(() => _isLoading = true);
     try {
       final db = DatabaseService.instance;
-      for final txn in _importResult!.validTransactions) {
+      for (final txn in _importResult!.validTransactions) {
         await db.insertTransaction(txn);
       }
       if (mounted) {
@@ -420,7 +392,7 @@ class _ImportPageState extends State<ImportPage> {
       setState(() => _isLoading = false);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Erreur lors de l\'import: $e')),
+          SnackBar(content: Text('Erreur lors de l\\'import: $e')),
         );
       }
     } finally {
@@ -430,4 +402,3 @@ class _ImportPageState extends State<ImportPage> {
     }
   }
 }
-  }

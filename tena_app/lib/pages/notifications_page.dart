@@ -18,7 +18,8 @@ class _NotificationsPageState extends State<NotificationsPage> {
     _refresh();
   }
 
-  void _refresh() {
+  Future<void> _refresh() async {
+    await NotificationService.updateNotifications();
     setState(() {
       _notificationsFuture = NotificationService.getNotifications();
     });
@@ -70,7 +71,7 @@ class _NotificationsPageState extends State<NotificationsPage> {
                   child: const Icon(Icons.delete, color: TenaColors.background),
                 ),
                 onDismissed: (_) async {
-                  await NotificationService.clearAll();
+                  await NotificationService.remove(n.id);
                   _refresh();
                 },
                 child: ListTile(

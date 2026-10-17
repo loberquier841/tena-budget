@@ -4,7 +4,12 @@ import '../models/user_profile.dart';
 import '../services/user_profile_service.dart';
 
 class ProfilePage extends StatefulWidget {
-  const ProfilePage({super.key});
+  final bool isOnboarding;
+  final VoidCallback? onSaved;
+
+  const ProfilePage({super.key, bool isOnboarding = false, VoidCallback? onSaved})
+      : isOnboarding = isOnboarding,
+        onSaved = onSaved;
 
   @override
   State<ProfilePage> createState() => _ProfilePageState();
@@ -133,6 +138,9 @@ class _ProfilePageState extends State<ProfilePage> {
       setState(
         () => _message = 'Profil enregistré et chiffré sur cet appareil.',
       );
+      if (widget.isOnboarding) {
+        widget.onSaved?.call();
+      }
     } catch (error) {
       setState(() => _message = 'Enregistrement impossible : $error');
     } finally {

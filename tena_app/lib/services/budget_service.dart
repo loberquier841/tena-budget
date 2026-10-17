@@ -1,5 +1,6 @@
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'package:tena_budget/services/notification_service_secure.dart';
 class BudgetService {
   static const String _globalKey = 'tena_budget_global';
   static const String _categoryPrefix = 'tena_budget_category_';
@@ -12,6 +13,7 @@ class BudgetService {
   static Future<void> setGlobalBudget(double amount) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setDouble(_globalKey, amount);
+    await NotificationService.updateNotifications();
   }
 
   static Future<double> getCategoryBudget(String category) async {
@@ -23,6 +25,7 @@ class BudgetService {
     final prefs = await SharedPreferences.getInstance();
 
     await prefs.setDouble('$_categoryPrefix$category', amount);
+    await NotificationService.updateNotifications();
   }
 
   static Future<void> deleteCategoryBudget(String category) async {

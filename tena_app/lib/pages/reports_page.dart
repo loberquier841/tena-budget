@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
 import '../services/finance_service.dart';
-import '../services/report_service.dart';
 import '../models/transaction.dart';
 import '../theme/tena_theme.dart';
 import '../widgets/tena_card.dart';
@@ -88,7 +87,7 @@ class _ReportsPageState extends State<ReportsPage> {
         totalExp += d.expenses;
       }
       final totalSave = totalInc - totalExp;
-      final saveRate = totalInc > 0 ? totalSave / totalInc : 0;
+      final saveRate = totalInc > 0 ? totalSave / totalInc : 0.0;
 
       setState(() {
         _monthlyData = last12;
@@ -167,7 +166,7 @@ class _ReportsPageState extends State<ReportsPage> {
                     'Revenus moins dépenses sur les 12 derniers mois',
               ),
               TenaStatCard(
-                label: 'Taux d\\'épargne',
+                label: "Taux d'épargne",
                 value: '${(_savingsRate * 100).roundToDouble()} %',
                 icon: Icons.trending_up,
                 valueColor: TenaColors.gold,
@@ -212,7 +211,6 @@ class _ReportsPageState extends State<ReportsPage> {
                               }
                               final month = _monthlyData[index].month;
                               return SideTitleWidget(
-                                axisSide: AxisSide.bottom,
                                 child: Text(
                                   '${month.month}/${month.year.toString().substring(2)}',
                                   style: TextStyle(
@@ -220,6 +218,7 @@ class _ReportsPageState extends State<ReportsPage> {
                                     color: TenaColors.textSecondary,
                                   ),
                                 ),
+                                meta: meta,
                               );
                             },
                           ),
@@ -230,7 +229,6 @@ class _ReportsPageState extends State<ReportsPage> {
                             reservedSize: 40,
                             getTitlesWidget: (value, meta) {
                               return SideTitleWidget(
-                                axisSide: AxisSide.left,
                                 child: Text(
                                   value.toInt().toString(),
                                   style: TextStyle(
@@ -238,6 +236,7 @@ class _ReportsPageState extends State<ReportsPage> {
                                     color: TenaColors.textSecondary,
                                   ),
                                 ),
+                                meta: meta,
                               );
                             },
                           ),
@@ -339,7 +338,6 @@ class _ReportsPageState extends State<ReportsPage> {
                                         ? '${category.substring(0, 10)}…'
                                         : category;
                                     return SideTitleWidget(
-                                      axisSide: AxisSide.bottom,
                                       child: Text(
                                         display,
                                         style: TextStyle(
@@ -347,6 +345,7 @@ class _ReportsPageState extends State<ReportsPage> {
                                           color: TenaColors.textSecondary,
                                         ),
                                       ),
+                                      meta: meta,
                                     );
                                   },
                                 ),
@@ -357,7 +356,6 @@ class _ReportsPageState extends State<ReportsPage> {
                                   reservedSize: 40,
                                   getTitlesWidget: (value, meta) {
                                     return SideTitleWidget(
-                                      axisSide: AxisSide.left,
                                       child: Text(
                                         value.toInt().toString(),
                                         style: TextStyle(
@@ -365,6 +363,7 @@ class _ReportsPageState extends State<ReportsPage> {
                                           color: TenaColors.textSecondary,
                                         ),
                                       ),
+                                      meta: meta,
                                     );
                                   },
                                 ),
@@ -380,7 +379,7 @@ class _ReportsPageState extends State<ReportsPage> {
                                     x: index,
                                     barRods: [
                                       BarChartRodData(
-                                        y: e.value,
+                                        toY: e.value,
                                         color: TenaColors.danger,
                                         width: 18,
                                       )

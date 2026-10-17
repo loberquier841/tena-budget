@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../models/transaction.dart';
 import '../services/database_service.dart';
 import '../services/category_service.dart';
+import '../pages/import_transactions_page.dart';
 
 class TransactionsPage extends StatefulWidget {
   const TransactionsPage({super.key});
@@ -10,6 +11,8 @@ class TransactionsPage extends StatefulWidget {
   @override
   State<TransactionsPage> createState() => _TransactionsPageState();
 }
+enum ImportOption { addTransaction, importTransactions }
+
 
 class _TransactionsPageState extends State<TransactionsPage> {
   final DatabaseService _database = DatabaseService.instance;
@@ -109,6 +112,39 @@ class _TransactionsPageState extends State<TransactionsPage> {
     await _loadTransactions();
   }
 
+
+  Future<void> _showImportOptions() async {
+    final choice = await showMenu<ImportOption>(
+      context: context,
+      position: RelativeRect.fromLTRB(
+        0,
+        kToolbarHeight,
+        0,
+        0,
+      ),
+      items: [
+        const PopupMenuItem<ImportOption>(
+          value: ImportOption.addTransaction,
+          child: Text('Ajouter une transaction'),
+        ),
+        const PopupMenuItem<ImportOption>(
+          value: ImportOption.importTransactions,
+          child: Text('Importer des transactions'),
+        ),
+      ],
+    );
+    if (choice == null) return;
+    if (choice == ImportOption.addTransaction) {
+      _addTransaction();
+    } else if (choice == ImportOption.importTransactions) {
+      // Navigate to the import page
+      if (mounted) {
+        Navigator.of(context).push(
+          MaterialPageRoute(builder: (_) => ImportTransactionsPage()),
+        );
+      }
+    }
+  }
   Future<void> _editTransaction(Transaction transaction) async {
     final result = await showDialog<Transaction>(
       context: context,
@@ -481,6 +517,10 @@ class _TransactionsPageState extends State<TransactionsPage> {
             ),
           ],
         ),
+      ),
+      floatingActionButton: FloatingActionButton(
+        child: const Icon(Icons.add),
+        onPressed: _showImportOptions,
       ),
     );
   }
