@@ -21,13 +21,10 @@ class ImportResult {
 
 class ImportService {
 
-
   final GetExistingTransactionsFn _getExistingTransactions;
 
   ImportService({GetExistingTransactionsFn? getExistingTransactions})
       : _getExistingTransactions = getExistingTransactions ?? DatabaseService.instance.getTransactions;
-  /// Result of an import attempt.
-
 
   /// Import transactions from a CSV or Excel file.
   /// [filePath] absolute or relative path to the file.
@@ -51,7 +48,7 @@ class ImportService {
         final csvData = await file.readAsString();
         rows = const CsvToListConverter(
                 fieldDelimiter: ',',
-                eol: '\n',
+                eol: '\\n',
                 shouldParseNumbers: false)
             .convert(csvData);
       } else if (ext == '.xlsx' || ext == '.xls') {
@@ -103,118 +100,150 @@ class ImportService {
       if (dateIdx == null && (h.contains('date') || h == 'date')) dateIdx = i;
       if (amountIdx == null && (h.contains('amount') || h == 'amount' || h == 'montant')) amountIdx = i;
       if (categoryIdx == null && (h.contains('category') || h == 'category' || h == 'catégorie')) categoryIdx = i;
-      if (descIdx == null && (h.contains('description') || h == 'description' || h == 'desc' || h == 'libelle')) descIdx = i;
+      if (descIdx == null && (h.contains('description') || h == 'description' || h == 'libelle' || h == 'memo')) descIdx = i;
     }
 
-    // Fallback to positional order if not found
-    dateIdx ??= 0;
-    amountIdx ??= 1;
-    categoryIdx ??= 2;
-    descIdx ??= 3;
+    if (dateIdx == null || amountIdx == null || categoryIdx == null) {
+      return ImportResult(
+        validTransactions: [],
+        errors: ['Missing required columns: date, amount, category are required'],
+        duplicateRows: [],
+      );
+    }
 
-    // Load existing transactions for duplicate detection
-    final existingTxns = await _getExistingTransactions();
+    // Fetch existing transactions for duplicate detection and ID collision avoidance
+    final existingTransactions = await _getExistingTransactions();
     final existingKeys = <String>{};
-    for (final txn in existingTxns) {
-      final key = _makeDuplicateKey(txn);
-      existingKeys.add(key);
+    final existingIds = <String>{};
+    for (final t in existingTransactions) {
+      existingKeys.add(_makeDuplicateKey(t));
+      existingIds.add(t.id);
     }
 
     final valid = <Transaction>[];
     final errors = <String>[];
     final duplicateRows = <int>[];
-    for (int i = 0; i < dataRows.length; i++) {
-      final row = dataRows[i];
-      final lineNumber = i + 2; // +2 because header is line 1, data starts at line 2
+    final generatedIds = <String>{}; // IDs generated in this batch to avoid collisions
 
-      // Guard against short rows
+    // Process each data row (line numbers start at 2 because of header)
+    for (int rowIndex = 0; rowIndex < dataRows.length; rowIndex++) {
+      final lineNumber = rowIndex + 2; // 1-indexed for error reporting, header is line 1
+      final row = dataRows[rowIndex];
       if (row.length <= dateIdx ||
           row.length <= amountIdx ||
           row.length <= categoryIdx ||
-          row.length <= descIdx) {
+          (descIdx != null && row.length <= descIdx)) {
         errors.add('Line $lineNumber: insufficient columns');
         continue;
       }
 
-      final dateRaw = row[dateIdx]?.toString().trim() ?? '';
-      final amountRaw = row[amountIdx]?.toString().trim() ?? '';
-      final categoryRaw = row[categoryIdx]?.toString().trim() ?? '';
-      final descriptionRaw = row[descIdx]?.toString().trim() ?? '';
+      final dateRaw = row[dateIdx].toString().trim();
+      final amountRaw = row[amountIdx].toString().trim();
+      final categoryRaw = row[categoryIdx].toString().trim();
+      final descriptionRaw = descIdx != null ? row[descIdx].toString().trim() : '';
 
       // Parse date
-      DateTime? date;
-      if (dateRaw.isNotEmpty) {
-        date = _parseDate(dateRaw);
-        if (date == null) {
-          errors.add('Line $lineNumber: invalid date format \"$dateRaw\"');
-          continue;
-        }
-      } else {
-        errors.add('Line $lineNumber: date is empty');
-         print('Date empty error line $lineNumber');
+      final date = _parseDate(dateRaw);
+      if (date == null) {
+        errors.add('Line $lineNumber: invalid date format');
         continue;
       }
 
       // Parse amount
       double? amount;
-      if (amountRaw.isNotEmpty) {
-        final cleaned = amountRaw.replaceAll(',', '.');
-        final parsed = double.tryParse(cleaned);
-        if (parsed != null && parsed > 0) {
-          amount = parsed;
-        } else {
-          errors.add('Line $lineNumber: amount must be a positive number (\"$amountRaw\")');
-          continue;
-        }
-      } else {
-        errors.add('Line $lineNumber: amount is empty');
+      try {
+        amount = double.parse(amountRaw);
+      } catch (_) {
+        errors.add('Line $lineNumber: invalid amount');
+        continue;
+      }
+      if (amount <= 0) {
+        errors.add('Line $lineNumber: amount must be positive');
         continue;
       }
 
-      // Category and description not empty
+      // Validate category and description (non-empty after trim)
       if (categoryRaw.isEmpty) {
-        errors.add('Line $lineNumber: category is empty');
+        errors.add('Line $lineNumber: category cannot be empty');
         continue;
       }
-      // description can be empty, we allow empty string
+      // Description can be empty, that's fine.
 
-      // Build transaction (type inferred from sign? We don't have sign in CSV/Excel.
-      // We'll assume all imported transactions are expenses unless prefixed with '+' or '-'?
-      // For simplicity, we'll treat as expense. The user can later edit type.
-      final type = TransactionType.expense;
+      // Trim category and description
+      final category = categoryRaw.trim();
+      final description = descriptionRaw.trim();
 
-      // Create transaction (id will be generated by DatabaseService.insertTransaction? Actually Transaction requires id.
-      // We'll generate a temporary UUID; the DB service will ignore? Actually insert expects id.
-      // We'll generate a UUID and let DB replace if conflict? Better to let DB generate? But Transaction constructor requires id.
-      // We'll use Uuid v1? Not available. We'll use DateTime.now().millisecondsSinceEpoch as pseudo unique.
-      // However collisions possible. We'll rely on DatabaseService to handle id generation? It currently expects id.
-      // We'll generate a random uuid using math.Random? Not ideal but okay for import.
-      // We'll import dart:math and generate.
-      final id = _generateId();
+      // Determine type based on context? Actually, the import should specify income/expense via a column or assume expense?
+      // The existing code assumed expense if not specified. We'll keep that: if there's a 'type' column, use it; else default to expense.
+      int? typeIdx;
+      for (int i = 0; i < header.length; i++) {
+        final h = header[i];
+        if (h.contains('type') || h == 'type' || h == 'revenu/dépense' || h == 'income/expense') {
+          typeIdx = i;
+          break;
+        }
+      }
+      TransactionType type = TransactionType.expense; // default
+      if (typeIdx != null && row.length > typeIdx) {
+        final typeRaw = row[typeIdx].toString().trim().toLowerCase();
+        if (typeRaw == 'income' || typeRaw == 'revenu' || typeRaw == 'credit') {
+          type = TransactionType.income;
+        } else if (typeRaw == 'expense' || typeRaw == 'dépense' || typeRaw == 'debit') {
+          type = TransactionType.expense;
+        } else {
+          // If unrecognized, default to expense and maybe log warning? We'll keep expense.
+        }
+      }
 
+      // Duplicate detection
       final transaction = Transaction(
-        id: id,
-        amount: amount!,
-        category: categoryRaw,
-        description: descriptionRaw,
-        date: date!,
+        id: '', // placeholder, will set after generating unique ID
+        amount: amount,
+        category: category,
+        description: description,
+        date: date,
         type: type,
         notes: '',
         isDeleted: false,
-
       );
-        print('About to create transaction at line $lineNumber');
-
-
-      // Duplicate detection
       final dupKey = _makeDuplicateKey(transaction);
       if (existingKeys.contains(dupKey)) {
         duplicateRows.add(lineNumber);
-        // Do not add to valid transactions
         continue;
       }
 
-      valid.add(transaction);
+      // Generate a unique ID
+      String? generatedId;
+      final maxAttempts = 10;
+      for (int attempt = 0; attempt < maxAttempts; attempt++) {
+        final candidateId = _generateId();
+        if (!existingIds.contains(candidateId) && !generatedIds.contains(candidateId)) {
+          generatedId = candidateId;
+          break;
+        }
+      }
+      generatedId ??= '${DateTime.now().microsecondsSinceEpoch}_${_generateId()}';
+
+      // Ensure it's still unique (should be)
+      if (existingIds.contains(generatedId) || generatedIds.contains(generatedId)) {
+        // Extremely unlikely, but if happens, we'll still use it and hope DB replace is okay? Better to error.
+        errors.add('Line $lineNumber: unable to generate unique ID after $maxAttempts attempts');
+        continue;
+      }
+      generatedIds.add(generatedId);
+      // Now create the transaction with the generated ID
+      final txnWithId = Transaction(
+        id: generatedId,
+        amount: amount,
+        category: category,
+        description: description,
+        date: date,
+        type: type,
+        notes: '',
+        isDeleted: false,
+      );
+
+      valid.add(txnWithId);
     }
 
     return ImportResult(
