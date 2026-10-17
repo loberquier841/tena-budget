@@ -583,14 +583,15 @@ class _DashboardPageState extends State<DashboardPage> {
         child: Row(
           children: [
             Container(
-              width: 44,
-              height: 44,
+              width: 56,
+              height: 56,
               decoration: BoxDecoration(
                 color: TenaColors.gold.withValues(alpha: 0.12),
                 borderRadius: TenaRadius.md,
               ),
               child: const Icon(
                 Icons.account_balance_wallet_outlined,
+                size: 28,
                 color: TenaColors.gold,
               ),
             ),
@@ -602,7 +603,7 @@ class _DashboardPageState extends State<DashboardPage> {
                   Text(
                     'Aucune opération ce mois-ci',
                     style: TextStyle(
-                      fontSize: 16,
+                      fontSize: 18,
                       fontWeight: FontWeight.w700,
                       color: TenaColors.textPrimary,
                     ),
@@ -612,7 +613,7 @@ class _DashboardPageState extends State<DashboardPage> {
                     'Ajoute une transaction depuis l\'onglet Transactions '
                     'pour voir apparaître ton solde et tes graphiques.',
                     style: TextStyle(
-                      fontSize: 13,
+                      fontSize: 14,
                       color: TenaColors.textSecondary,
                       height: 1.4,
                     ),
@@ -1431,7 +1432,9 @@ class _GoalPreviewRow extends StatelessWidget {
             Text(
               reached
                   ? 'Atteint'
-                  : '${tenaMoney(saved)} / ${tenaMoney(target)}',
+                  : target <= 0
+                      ? '${tenaMoney(saved)} / ${tenaMoney(target)}'
+                      : '${tenaMoney(saved)} / ${tenaMoney(target)} (${((saved / target) * 100).toStringAsFixed(0)}%)',
               style: TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w600,
