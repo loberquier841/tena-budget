@@ -1,12 +1,18 @@
 
 'use client';
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
+import {
+  step1Selection, step2Analyse, step3Detection, step4Resume, step5Corrections,
+  step6Doublons, step7Comparaison, step8Previsualisation, step9Validation,
+  step10Import, step11Rapport,
+  type MigrationState, type OriginalFile, type RecognizedColumn, type ImportReport,
+} from '@tena/import-engine';
 
 type Step = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11;
 
-const steps = [
-  { n: 1, label: 'Sélection', desc: 'XLSX multi-feuilles + CSV, fichiers originaux read-only' },
-  { n: 2, label: 'Analyse', desc: 'SheetJS worker, rawCells jamais mutés' },
+const steps: { n: Step; label: string; desc: string }[] = [
+  { n: 1, label: 'Sélection', desc: 'CSV + XLSX multi-feuilles, fichiers originaux read-only' },
+  { n: 2, label: 'Analyse', desc: 'CSV parsé nativement, rawCells jamais mutés' },
   { n: 3, label: 'Détection', desc: 'Colonnes + confiance 0-100, EUR + dates FR' },
   { n: 4, label: 'Résumé', desc: 'Catégories, budgets, dépenses, personnes, années, partiel?' },
   { n: 5, label: 'Corrections', desc: 'Mapping corrigé = réexécution réelle recognizeData()' },
@@ -20,16 +26,22 @@ const steps = [
 
 export default function ImportPage() {
   const [currentStep, setCurrentStep] = useState<Step>(1);
-  const [files, setFiles] = useState<string[]>([]);
-  const [ambiguous, setAmbiguous] = useState([{ column: 'Prévu 2027', guesses: [{ mappedTo: 'budget', confidence: 60 }], status: 'pending', samples: ['4000', '3500'] }]);
-  const [duplicates, setDuplicates] = useState([{ id: 'dup_abc', type: 'exact', incoming: { label: 'Courses Leclerc', amount: 5000, date: '2026-01-15' }, existing: { label: 'Courses Leclerc', amount: 5000, date: '2026-01-15', id: 'tx1' }, decision: 'keep_both' }]);
-  const [years, setYears] = useState([2024, 2025, 2026]);
-  const [yearsSelected, setYearsSelected] = useState([2026]);
-  const [validated, setValidated] = useState(false);
-  const [report, setReport] = useState<any>(null);
+  const [selectedFiles, setSelectedFiles] = useState<FileList | null>(null);
+  const [state, setState] = useState<MigrationState | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [report, setReport] = useState<ImportReport | null>(null);
+  const [recognizedColumns, setRecognizedColumns] = useState<RecognizedColumn[]>([]);
+  const [ambiguous, setAmbiguous] = useState<{ column: string; status: string }[]>([]);
+  const [duplicateGroups, setDuplicateGroups] = useState<any[]>([]);
+  const [preview, setPreview] = useState<any>(null);
+  const [corrections, setCorrections] = useState<Record<string, RecognizedColumn['mappedTo']>>({});
+  const [yearsSelected, setYearsSelected] = useState<number[]>([]);
+  const [duplicateDecisions, setDuplicateDecisions] = useState<Record<string, string>>({});
 
-  const canGoBack = currentStep > 1 && currentStep !== 10; // Pas de retour arrière après import réel
-  const canGoNext = currentStep < 11 && (currentStep !== 9 || validated); // Validation obligatoire pour passer 9->10
+  const existingTransactions: { id: string; amountCents: number; bookingDate: Date; label: string; hashDedup: string }[] = [];
+
+  const canGoBack = currentStep > 1 && currentStep !== 10;
+  const canGoNext = currentStep < 11 && (currentStep !== 9 || state?.validated);
 
   return (
     <main style={{ marginLeft: 260, padding: 24, background: '#fafafa', minHeight: '100vh' }}>

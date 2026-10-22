@@ -4,6 +4,16 @@ import 'dart:math';
 import 'package:cryptography/cryptography.dart';
 import 'package:meta/meta.dart';
 
+// Exception pour signaler une erreur de chiffrement/déchiffrement
+// sans transformer silencieusement les données financières en zéro.
+class CryptoException implements Exception {
+  final String code;
+  final String message;
+  const CryptoException(this.code, this.message);
+  @override
+  String toString() => 'CryptoException($code): $message';
+}
+
 /// Source de la clé maîtresse de chiffrement.
 ///
 /// Cette interface isole le chiffrement de tout mécanisme de stockage : la
@@ -157,15 +167,26 @@ class CryptoService {
     return encrypt(value.toString());
   }
 
-  /// Déchiffre un nombre. Une valeur illisible ne fait pas échouer la lecture
-  /// de toute la base : elle vaut zéro et le contenu fautif est ignoré.
+  /// Déchiffre un nombre. Une erreur de déchiffrement ne doit pas être
+  /// transformée silencieusement en montant égal à zéro, ce qui pourrait
+  /// fausser les finances de l'utilisateur.
+  ///
+  /// Lance [CryptoException] en cas d'échec de déchiffrement ; l'appelant
+  /// doit gérer cette erreur plutôt que de laisser la valeur devenir zéro.
   static Future<double> decryptNumber(String value) async {
     if (!_isEncrypted(value)) return double.tryParse(value) ?? 0;
 
     try {
-      return double.tryParse(await decrypt(value)) ?? 0;
+      final cleared = await decrypt(value);
+      final result = double.tryParse(cleared);
+      if (result != null) return result;
+      // Valeur déchiffrée mais pas un nombre valide -> erreur plutôt que zéro
+      throw CryptoException('DECRYPT_PARSE_FAILED', 'Valeur déchiffrée non interprétable comme nombre');
+    } on CryptoException {
+      rethrow;
     } catch (_) {
-      return 0;
+      // Échec de déchiffrement -> erreur explicite, pas de valeur zéro silencieuse
+      throw CryptoException('DECRYPT_FAILED', 'Échec du déchiffrement du montant');
     }
   }
 

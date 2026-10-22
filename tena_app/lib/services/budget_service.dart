@@ -1,32 +1,25 @@
-import 'package:shared_preferences/shared_preferences.dart';
+import 'database_service.dart';
 
 class BudgetService {
-  static const String _globalKey = 'tena_budget_global';
-  static const String _categoryPrefix = 'tena_budget_category_';
+  static final DatabaseService _db = DatabaseService.instance;
 
   static Future<double> getGlobalBudget() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getDouble(_globalKey) ?? 0;
+    return _db.getGlobalBudget();
   }
 
   static Future<void> setGlobalBudget(double amount) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setDouble(_globalKey, amount);
+    await _db.setGlobalBudget(amount);
   }
 
   static Future<double> getCategoryBudget(String category) async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getDouble('$_categoryPrefix$category') ?? 0;
+    return _db.getCategoryBudget(category);
   }
 
   static Future<void> setCategoryBudget(String category, double amount) async {
-    final prefs = await SharedPreferences.getInstance();
-
-    await prefs.setDouble('$_categoryPrefix$category', amount);
+    await _db.setCategoryBudget(category, amount);
   }
 
   static Future<void> deleteCategoryBudget(String category) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove('$_categoryPrefix$category');
+    await _db.deleteCategoryBudget(category);
   }
 }

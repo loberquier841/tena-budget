@@ -6,16 +6,37 @@
   "author": "TENA",
   "scripts": {
     "dev": "electron . --no-sandbox",
-    "build": "electron-builder --linux --dir",
+    "build": "electron-builder --linux --win --mac",
+    "build:linux": "electron-builder --linux --dir",
+    "build:win": "electron-builder --win",
+    "build:mac": "electron-builder --mac",
     "build:appimage": "electron-builder --linux"
   },
   "build": {
     "appId": "fr.tena.budget",
     "productName": "TENA Budget",
     "electronVersion": "44.5.1",
-    "files": ["main.js", "../mobile/dist/**/*"],
+    "files": [
+      "main.js",
+      "../mobile/dist/**/*",
+      "assets/**/*",
+      "locale/**/*"
+    ],
     "linux": {
-      "target": ["dir", "AppImage"]
+      "target": [
+        "dir",
+        "AppImage"
+      ]
+    },
+    "win": {
+      "target": "exe",
+      "arch": [
+        "x64"
+      ]
+    },
+    "mac": {
+      "target": ["default"],
+      "icon": "assets/TENΛ Budget.icns"
     }
   },
   "devDependencies": {

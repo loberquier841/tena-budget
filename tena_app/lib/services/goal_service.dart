@@ -1,6 +1,6 @@
 import 'dart:convert';
 
-import 'package:shared_preferences/shared_preferences.dart';
+import 'database_service.dart' as database_service;
 
 class Goal {
   final String id;
@@ -39,37 +39,35 @@ class Goal {
       saved: (json['saved'] as num).toDouble(),
     );
   }
+
+  /// Convertit une [GoalEntry] de la base en [Goal] pour l'interface.
+  factory Goal.fromEntry(database_service.GoalEntry entry) {
+    return Goal(
+      id: entry.id,
+      name: entry.name,
+      target: entry.targetCents,
+      saved: entry.savedCents,
+    );
+  }
 }
 
 class GoalService {
-  static const String _key = 'tena_budget_goals';
+  static final DatabaseService _db = DatabaseService.instance;
 
   static Future<List<Goal>> getGoals() async {
-    final prefs = await SharedPreferences.getInstance();
-    final data = prefs.getString(_key);
-
-    if (data == null || data.isEmpty) {
-      return [];
-    }
-
-    try {
-      final list = jsonDecode(data) as List;
-
-      return list
-          .map((item) => Goal.fromJson(Map<String, dynamic>.from(item as Map)))
-          .toList();
-    } catch (_) {
-      return [];
-    }
+    final entries = await _db.getGoals();
+    return entries.map((e) => Goal.fromEntry(e)).toList();
   }
 
   static Future<void> saveGoals(List<Goal> goals) async {
-    final prefs = await SharedPreferences.getInstance();
-
-    await prefs.setString(
-      _key,
-      jsonEncode(goals.map((goal) => goal.toJson()).toList()),
-    );
+    for (final goal in goals) {
+      await _db.insertGoal(database_service.GoalEntry(
+        id: goal.id,
+        name: goal.name,
+        targetCents: goal.target,
+        savedCents: goal.saved,
+      ));
+    }
   }
 
   static Future<void> addGoal({
@@ -92,22 +90,15 @@ class GoalService {
   }
 
   static Future<void> updateGoal(Goal updatedGoal) async {
-    final goals = await getGoals();
-
-    final index = goals.indexWhere((goal) => goal.id == updatedGoal.id);
-
-    if (index == -1) return;
-
-    goals[index] = updatedGoal;
-
-    await saveGoals(goals);
+    await _db.insertGoal(database_service.GoalEntry(
+      id: updatedGoal.id,
+      name: updatedGoal.name,
+      targetCents: updatedGoal.target,
+      savedCents: updatedGoal.saved,
+    ));
   }
 
   static Future<void> deleteGoal(String id) async {
-    final goals = await getGoals();
-
-    goals.removeWhere((goal) => goal.id == id);
-
-    await saveGoals(goals);
+    await _db.deleteGoal(id);
   }
 }

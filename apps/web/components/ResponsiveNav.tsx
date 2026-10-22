@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation';
 import { useState } from 'react';
 
 const links = [
+  { href: '/onboarding', label: 'Onboarding', icon: '📝', desc: 'Questionnaire et profil local' },
   { href: '/dashboard', label: 'Tableau de bord', icon: '📊', desc: 'Budget prévu vs dépensé vs restant Int' },
   { href: '/budgets', label: 'Budgets', icon: '💰', desc: 'Annuels/mensuels Int centimes' },
   { href: '/transactions', label: 'Transactions', icon: '💳', desc: 'Liées personne, soft delete' },

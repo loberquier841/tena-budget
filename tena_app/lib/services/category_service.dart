@@ -1,3 +1,6 @@
+import 'dart:convert';
+
+import '../services/crypto_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class CategoryService {
@@ -21,14 +24,26 @@ class CategoryService {
   static Future<List<String>> getCategories() async {
     final prefs = await SharedPreferences.getInstance();
 
-    final categories = prefs.getStringList(_key);
+    final raw = prefs.getString(_key);
 
-    if (categories == null || categories.isEmpty) {
-      await prefs.setStringList(_key, defaultCategories);
+    if (raw == null || raw.isEmpty) {
+      await prefs.setString(_key, await CryptoService.encrypt(jsonEncode(defaultCategories)));
       return List<String>.from(defaultCategories);
     }
 
-    return categories;
+    try {
+      final decrypted = await CryptoService.decrypt(raw);
+      final categories = jsonDecode(decrypted) as List;
+      return List<String>.from(categories.cast<String>());
+    } catch (_) {
+      // Données en clair (version antérieure) : retour en clair pour rétrocompatibilité
+      final categories = prefs.getStringList(_key);
+      if (categories == null || categories.isEmpty) {
+        await prefs.setString(_key, await CryptoService.encrypt(jsonEncode(defaultCategories)));
+        return List<String>.from(defaultCategories);
+      }
+      return List<String>.from(categories);
+    }
   }
 
   static Future<void> saveCategories(
@@ -36,7 +51,7 @@ class CategoryService {
   ) async {
     final prefs = await SharedPreferences.getInstance();
 
-    await prefs.setStringList(_key, categories);
+    await prefs.setString(_key, await CryptoService.encrypt(jsonEncode(categories)));
   }
 
   static Future<void> addCategory(String category) async {

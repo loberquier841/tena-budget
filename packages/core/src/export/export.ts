@@ -138,3 +138,46 @@ export function verifyExportTotals(transactions: Transaction[], exportData: { to
   const realTotal = validTx.reduce((s, t) => s + t.amountCents, 0);
   return realTotal === exportData.totalCents;
 }
+
+// ---------- Écriture de fichiers (navigateur, aucune dépendance externe) ----------
+
+/**
+ * Déclenche le téléchargement d'un contenu texte sous forme de fichier.
+ * Utilise Blob + URL.createObjectURL (navigateur uniquement).
+ * Retourne true si le téléchargement a pu être initié.
+ */
+export function downloadAsFile(content: string, fileName: string, mimeType: string): boolean {
+  if (typeof window === 'undefined' || typeof document === 'undefined') {
+    return false;
+  }
+  const blob = new Blob([content], { type: mimeType });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = fileName;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 10000);
+  return true;
+}
+
+/**
+ * Construit une erreur explicite pour un format d'export non pris en charge.
+ */
+export function unsupportedFormatError(format: string): Error {
+  return new Error(`EXPORT_FORMAT_NOT_SUPPORTED: le format "${format}" n'est pas pris en charge. Formats disponibles: csv.`);
+}
+
+/**
+ * Prépare et télécharge un export CSV. Retourne les données préparées.
+ * Lance une erreur explicite si le téléchargement n'est pas possible (environnement non navigateur).
+ */
+export function exportCsvToFile(transactions: Transaction[], filters: ExportFilters, role: Role): CsvExportData {
+  const data = prepareCsvExport(transactions, filters, role);
+  const ok = downloadAsFile(data.content, data.fileName, 'text/csv;charset=utf-8');
+  if (!ok) {
+    throw new Error('EXPORT_DOWNLOAD_UNAVAILABLE: impossible de déclencher le téléchargement du fichier CSV (environnement non navigateur).');
+  }
+  return data;
+}

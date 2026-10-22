@@ -4,6 +4,153 @@ import { OriginalFile, AnalyzedSheet } from "./types";
 // Parser sécurisé - aucun eval/Function
 // Support XLSX multi-feuilles et CSV, dates FR, montants EUR
 
+// ---------- CSV natif (aucune dépendance externe) ----------
+
+const BOM = '\uFEFF';
+
+/**
+ * Détermine le séparateur de CSV le plus probable parmi , ; \t.
+ * Préfère le séparateur qui donne un nombre de colonnes constant > 1 sur les premières lignes.
+ */
+function detectCsvSeparator(text: string): ',' | ';' | '\t' {
+  const candidates: Array<',' | ';' | '\t'> = [',', ';', '\t'];
+  const lines = text.split(/\r?\n/).filter(l => l.length > 0).slice(0, 10);
+  if (lines.length === 0) return ',';
+
+  let best: ',' | ';' | '\t' = ',';
+  let bestScore = -1;
+  for (const sep of candidates) {
+    const counts = lines.map(l => (l.match(new RegExp('\\' + (sep === '\t' ? '\\t' : sep), 'g')) || []).length);
+    const uniqueCounts = new Set(counts);
+    const constant = uniqueCounts.size === 1 ? 2 : 1;
+    const avgCols = counts.reduce((a, b) => a + b, 0) / counts.length;
+    const score = constant * 10 + (avgCols > 1 ? avgCols : 0);
+    if (score > bestScore) {
+      bestScore = score;
+      best = sep;
+    }
+  }
+  return best;
+}
+
+/**
+ * Découpe une ligne CSV en champs en gérant les guillemets doubles (escape "" -> ").
+ */
+function parseCsvLine(line: string, sep: ',' | ';' | '\t'): string[] {
+  const fields: string[] = [];
+  let i = 0;
+  const sepChar = sep === '\t' ? '\t' : sep;
+  while (i < line.length) {
+    if (line[i] === '"') {
+      i++; // skip opening quote
+      let field = '';
+      while (i < line.length) {
+        if (line[i] === '"') {
+          if (i + 1 < line.length && line[i + 1] === '"') {
+            field += '"';
+            i += 2;
+          } else {
+            i++; // skip closing quote
+            break;
+          }
+        } else {
+          field += line[i];
+          i++;
+        }
+      }
+      while (i < line.length && line[i] !== sepChar) i++;
+      if (i < line.length) i++; // skip sep
+      fields.push(field);
+    } else {
+      const end = line.indexOf(sepChar, i);
+      if (end === -1) {
+        fields.push(line.slice(i));
+        i = line.length;
+      } else {
+        fields.push(line.slice(i, end));
+        i = end + 1;
+      }
+    }
+  }
+  return fields;
+}
+
+/**
+ * Parse un texte CSV en { headers, rows }.
+ * rows: tableau d'objets keyé par les headers.
+ */
+export function parseCsvText(text: string): { headers: string[]; rows: Record<string, any>[]; rawCells: any[][] } {
+  let cleaned = text.replace(BOM, '');
+  cleaned = cleaned.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+  const lines = cleaned.split('\n');
+  while (lines.length > 0 && lines[lines.length - 1].trim() === '') lines.pop();
+  if (lines.length === 0) return { headers: [], rows: [], rawCells: [] };
+
+  const sep = detectCsvSeparator(cleaned);
+  const rawCells: any[][] = [];
+  const headers: string[] = [];
+  const rows: Record<string, any>[] = [];
+
+  const headerFields = parseCsvLine(lines[0], sep);
+  for (const h of headerFields) headers.push(h.trim());
+  rawCells.push(headerFields);
+
+  for (let li = 1; li < lines.length; li++) {
+    const fields = parseCsvLine(lines[li], sep);
+    rawCells.push(fields);
+    const row: Record<string, any> = {};
+    for (let ci = 0; ci < headers.length; ci++) {
+      row[headers[ci]] = ci < fields.length ? fields[ci] : '';
+    }
+    rows.push(row);
+  }
+
+  return { headers, rows, rawCells };
+}
+
+/**
+ * Lit le buffer ArrayBuffer d'un fichier et retourne le texte (UTF-8).
+ * Ne mutera jamais le buffer source.
+ */
+export function bufferToText(buffer: ArrayBuffer): string {
+  const bytes = new Uint8Array(buffer);
+  const decoder = new TextDecoder('utf-8');
+  return decoder.decode(bytes);
+}
+
+/**
+ * Analyse réels les fichiers : CSV parsé ici-même, XLSX laisse la structure
+ * prête pour SheetJS (à activer quand la dépendance sera installée).
+ */
+export async function analyzeFiles(files: OriginalFile[]): Promise<AnalyzedSheet[]> {
+  const result: AnalyzedSheet[] = [];
+  for (const file of files) {
+    if (file.mime === 'csv') {
+      const text = bufferToText(file.buffer);
+      const { headers, rows, rawCells } = parseCsvText(text);
+      result.push({
+        fileId: file.id,
+        sheetName: 'CSV',
+        headers,
+        rows,
+        rawCells,
+      });
+    } else if (file.mime === 'xlsx') {
+      const sheets = file.sheets && file.sheets.length ? file.sheets : ['Sheet1'];
+      for (const sheetName of sheets) {
+        result.push({
+          fileId: file.id,
+          sheetName,
+          headers: [],
+          rows: [],
+          rawCells: [],
+        });
+      }
+    }
+  }
+  return result;
+}
+
 const FORBIDDEN_FORMULA_KEYWORDS = ['eval', 'Function', 'import', 'require', 'process', 'window', 'document', 'fetch', 'XMLHttpRequest'];
 
 export function isFormulaSafe(raw: string): { safe: boolean; reason?: string } {
@@ -81,34 +228,4 @@ export function hashDedup(bookingDate: Date, amountCents: number, label: string)
   return h.toString(16);
 }
 
-// Analyse XLSX multi-feuilles - interface, implémentation réelle utilise SheetJS en worker
-export async function analyzeFiles(files: OriginalFile[]): Promise<AnalyzedSheet[]> {
-  // Cette fonction est appelée dans un Web Worker avec SheetJS
-  // Ici version mock pour tests - en prod: XLSX.read + sheet_to_json
-  const result: AnalyzedSheet[] = [];
-  for (const file of files) {
-    if (file.mime === 'csv') {
-      // CSV: parse via PapaParse en prod
-      result.push({
-        fileId: file.id,
-        sheetName: 'CSV',
-        headers: ['Category', 'Budget', 'Spent', 'Date'], // mock
-        rows: [],
-        rawCells: [],
-      });
-    } else if (file.mime === 'xlsx') {
-      // Multi-feuilles: file.sheets contient noms
-      const sheets = file.sheets && file.sheets.length ? file.sheets : ['Sheet1'];
-      for (const sheetName of sheets) {
-        result.push({
-          fileId: file.id,
-          sheetName,
-          headers: [],
-          rows: [],
-          rawCells: [],
-        });
-      }
-    }
-  }
-  return result;
-}
+

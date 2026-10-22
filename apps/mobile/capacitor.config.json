@@ -1,0 +1,6 @@
+{
+  "appId": "fr.tena.budget",
+  "appName": "TENΛ Budget",
+  "webDir": "dist",
+  "bundledWebRuntime": false
+}

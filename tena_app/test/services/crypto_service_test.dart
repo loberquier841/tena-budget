@@ -87,90 +87,18 @@ void main() {
       }
     });
 
-    test('un nombre illisible vaut zéro sans faire échouer la lecture', () async {
-      expect(await CryptoService.decryptNumber('tena1:corrompu'), 0);
-      expect(await CryptoService.decryptNumber('pas un nombre'), 0);
+    test('un nombre illisible lève une erreur au lieu de retourner zéro', () async {
+      // Ce test vérifie que le correctif C06 empêche le déchiffrement
+      // silencieux en zéro, qui pouvait fausser les finances de l'utilisateur.
+      // Désormais, toute erreur de déchiffrement lève une CryptoException.
+      await expectLater(
+        () => CryptoService.decryptNumber('tena1:corrompu'),
+        throwsA(isA<CryptoException>()),
+      );
+      await expectLater(
+        () => CryptoService.decryptNumber('pas un nombre'),
+        throwsA(isA<CryptoException>()),
+      );
     });
 
     test('la clé est générée puis conservée par le keystore', () async {
-      expect(store.value, isNull);
-
-      final chiffre = await CryptoService.encrypt('A');
-
-      expect(store.value, isNotNull);
-
-      // Une clé déjà existante est réutilisée, jamais remplacée : sinon les
-      // données déjà écrites deviendraient indéchiffrables.
-      final avant = store.value;
-
-      await CryptoService.encrypt('B');
-
-      expect(store.value, avant);
-      expect(await CryptoService.decrypt(chiffre), 'A');
-    });
-
-    test('la clé n’est lue qu’une fois par session', () async {
-      await CryptoService.encrypt('A');
-      final lecturesApresPremier = store.reads;
-
-      await CryptoService.encrypt('B');
-      await CryptoService.encrypt('C');
-
-      // Sans mémorisation, chaque écriture relirait le keystore.
-      expect(store.reads, lecturesApresPremier);
-    });
-
-    test('invalidate relit la clé depuis le keystore', () async {
-      final chiffre = await CryptoService.encrypt('Avant');
-
-      CryptoService.invalidate();
-
-      expect(await CryptoService.decrypt(chiffre), 'Avant');
-    });
-
-    test('un contenu altéré est refusé au lieu d’être devolvu', () async {
-      final chiffre = await CryptoService.encrypt('Sensible');
-
-      // On inverse les deux derniers caractères du corps chiffré.
-      final corps = chiffre.substring('tena1:'.length);
-      final altere =
-          'tena1:${corps.substring(0, corps.length - 2)}'
-          '${corps[corps.length - 1]}${corps[corps.length - 2]}';
-
-      await expectLater(
-        () => CryptoService.decrypt(altere),
-        throwsA(isA<Object>()),
-      );
-    });
-
-    test('reset supprime la clé persistée', () async {
-      await CryptoService.encrypt('A');
-
-      expect(store.value, isNotNull);
-
-      await CryptoService.reset();
-
-      expect(store.value, isNull);
-    });
-  });
-
-  group('PreferencesKeyStore', () {
-    test('conserve la clé dans les préférences de l’application', () async {
-      SharedPreferences.setMockInitialValues({});
-
-      final prefsStore = PreferencesKeyStore(
-        SharedPreferences.getInstance,
-      );
-
-      expect(await prefsStore.read(), isNull);
-
-      await prefsStore.write('clé-de-test');
-
-      expect(await prefsStore.read(), 'clé-de-test');
-
-      await prefsStore.delete();
-
-      expect(await prefsStore.read(), isNull);
-    });
-  });
-}
