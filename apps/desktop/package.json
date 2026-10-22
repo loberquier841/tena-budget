@@ -31,7 +31,8 @@
     "win": {
       "target": "exe",
       "arch": [
-        "x64"
+        "x64",
+        "ia32"
       ]
     },
     "mac": {

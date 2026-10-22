@@ -1,15 +1,19 @@
-
 import { auth } from "@/auth";
+import { getLocalBudgets, LocalBudget } from "@/sync/dexie";
 
 export default async function BudgetsPage() {
   const session = await auth();
   if (!session) return <main style={{ marginLeft: 260, padding: 24 }}><p>Non connecté - <a href="/login">Login</a></p></main>;
 
-  const mockBudgets = [
-    { id: 'bud1', year: 2026, month: null, type: 'annual', category: 'Courses', person: null, amountCents: 400000 },
-    { id: 'bud2', year: 2026, month: 5, type: 'monthly', category: 'Logement', person: 'Parent 1', amountCents: 80000 },
-    { id: 'bud3', year: 2026, month: null, type: 'annual', category: 'Transport', person: 'Parent 2', amountCents: 120000 },
-  ];
+  const familyId = session.userId;
+
+  // Chargement réel depuis IndexedDB Dexie (synchronique en server component)
+  let budgets: LocalBudget[] = [];
+  try {
+    budgets = await getLocalBudgets(familyId);
+  } catch (e) {
+    console.error("Erreur chargement budgets:", e);
+  }
 
   return (
     <main style={{ marginLeft: 260, padding: 24, background: '#fafafa', minHeight: '100vh' }}>
@@ -34,12 +38,12 @@ export default async function BudgetsPage() {
             </tr>
           </thead>
           <tbody>
-            {mockBudgets.map(b => (
+            {budgets.map(b => (
               <tr key={b.id} style={{ borderTop: '1px solid #f3f4f6' }}>
                 <td style={{ padding: 12 }}><span style={{ background: b.type==='annual'?'#ddd6fe':'#fef3c7', padding: '2px 8px', borderRadius: 12, fontSize: 11 }}>{b.type}</span></td>
                 <td style={{ padding: 12 }}>{b.year}{b.month ? `-${String(b.month).padStart(2,'0')}` : ''}</td>
-                <td style={{ padding: 12 }}>{b.category}</td>
-                <td style={{ padding: 12 }}>{b.person || 'Famille (global)'} {b.person ? '(individuel)' : '(global - jamais mélangé)'}</td>
+                <td style={{ padding: 12 }}>{b.categoryId || 'Non défini'}</td>
+                <td style={{ padding: 12 }}>{b.personId || 'Famille (global)'} {b.personId ? '(individuel)' : '(global - jamais mélangé)'}</td>
                 <td style={{ padding: 12 }}><strong>{(b.amountCents/100).toFixed(2)} €</strong><br/><span style={{ fontSize: 10, color: '#888' }}>{b.amountCents}c Int</span></td>
                 <td style={{ padding: 12 }}><button style={{ fontSize: 12, padding: '4px 8px', borderRadius: 6, border: '1px solid #e5e7eb' }}>Modifier</button> <button style={{ fontSize: 12, padding: '4px 8px', borderRadius: 6, border: '1px solid #fecaca', color: '#ef4444' }}>Archiver (soft)</button></td>
               </tr>
