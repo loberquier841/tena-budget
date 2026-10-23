@@ -15,14 +15,14 @@ export default function RootLayout({
     <html lang="fr">
       <head>
         <link rel="manifest" href="/manifest.json" />
-        <meta name="theme-color" content="#08090d" />
+        <meta name="theme-color" content="#09090b" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
       </head>
       <body
         style={{
           margin: 0,
           fontFamily: 'system-ui, -apple-system, sans-serif',
-          background: '#08090d',
+          background: '#09090b',
         }}
       >
         <ResponsiveNav />
