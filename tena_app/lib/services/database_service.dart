@@ -37,6 +37,13 @@ class GoalEntry {
   final String name;
   final int targetCents;
   final int savedCents;
+  final String category;
+  final String? targetDate;
+  final int? recurringAmountCents;
+  final String? recurringStartDate;
+  final String milestones; // JSON array as string
+  final String createdAt;
+  final String updatedAt;
   final bool isDeleted;
 
   const GoalEntry({
@@ -44,6 +51,13 @@ class GoalEntry {
     required this.name,
     required this.targetCents,
     required this.savedCents,
+    this.category = 'other',
+    this.targetDate,
+    this.recurringAmountCents,
+    this.recurringStartDate,
+    this.milestones = '[25,50,75,100]',
+    required this.createdAt,
+    required this.updatedAt,
     this.isDeleted = false,
   });
 }
@@ -75,7 +89,7 @@ class DatabaseService {
   /// v3 : chiffrement AES-GCM des transactions existantes.
   /// v4 : profil/questionnaire local chiffré; migration additive.
   /// v5 : tables budgets et objectives chiffrées, cohérentes avec les transactions.
-  static const int _schemaVersion = 6;
+  static const int _schemaVersion = 7;
 
   /// Version stockée dans la base de données (lue au premier accès).
   /// Si cette version est inférieure à _schemaVersion, des migrations sont
@@ -124,6 +138,10 @@ class DatabaseService {
 
         if (oldVersion < 6) {
           await _migrateToV6(db);
+        }
+
+        if (oldVersion < 7) {
+          await _migrateToV7(db);
         }
 
         // Mise à jour de la version stockée après toutes les migrations
@@ -190,8 +208,14 @@ class DatabaseService {
         name TEXT NOT NULL,
         target_cents TEXT NOT NULL,
         saved_cents TEXT NOT NULL,
-        is_deleted INTEGER NOT NULL DEFAULT 0,
+        category TEXT NOT NULL DEFAULT 'other',
+        target_date TEXT,
+        recurring_amount_cents TEXT,
+        recurring_start_date TEXT,
+        milestones TEXT NOT NULL DEFAULT '[25,50,75,100]',
+        created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL,
+        is_deleted INTEGER NOT NULL DEFAULT 0,
         userId TEXT NOT NULL DEFAULT 'primary'
       )
     ''');
@@ -242,6 +266,32 @@ class DatabaseService {
     );
     await db.execute(
       'ALTER TABLE goals ADD COLUMN userId TEXT NOT NULL DEFAULT "primary"',
+    );
+  }
+
+  /// Migration v6 -> v7 : ajoute les colonnes enrichies pour les objectifs
+  /// (catégorie, date cible, récurrent, jalons, dates de création/mise à jour).
+  Future<void> _migrateToV7(Database db) async {
+    await db.execute(
+      'ALTER TABLE goals ADD COLUMN category TEXT NOT NULL DEFAULT "other"',
+    );
+    await db.execute(
+      'ALTER TABLE goals ADD COLUMN target_date TEXT',
+    );
+    await db.execute(
+      'ALTER TABLE goals ADD COLUMN recurring_amount_cents TEXT',
+    );
+    await db.execute(
+      'ALTER TABLE goals ADD COLUMN recurring_start_date TEXT',
+    );
+    await db.execute(
+      'ALTER TABLE goals ADD COLUMN milestones TEXT NOT NULL DEFAULT \'[25,50,75,100]\'',
+    );
+    await db.execute(
+      'ALTER TABLE goals ADD COLUMN created_at TEXT NOT NULL DEFAULT (datetime(\'now\'))',
+    );
+    await db.execute(
+      'ALTER TABLE goals ADD COLUMN updated_at TEXT NOT NULL DEFAULT (datetime(\'now\'))',
     );
   }
 
@@ -438,8 +488,18 @@ class DatabaseService {
       'name': await CryptoService.encrypt(goal.name),
       'target_cents': await CryptoService.encryptNumber(goal.targetCents.toDouble()),
       'saved_cents': await CryptoService.encryptNumber(goal.savedCents.toDouble()),
+      'category': await CryptoService.encrypt(goal.category),
+      'target_date': goal.targetDate != null ? await CryptoService.encrypt(goal.targetDate!) : null,
+      'recurring_amount_cents': goal.recurringAmountCents != null
+          ? await CryptoService.encryptNumber(goal.recurringAmountCents!.toDouble())
+          : null,
+      'recurring_start_date': goal.recurringStartDate != null
+          ? await CryptoService.encrypt(goal.recurringStartDate!)
+          : null,
+      'milestones': await CryptoService.encrypt(goal.milestones),
+      'created_at': await CryptoService.encrypt(goal.createdAt),
+      'updated_at': await CryptoService.encrypt(goal.updatedAt),
       'is_deleted': goal.isDeleted ? 1 : 0,
-      'updated_at': DateTime.now().toIso8601String(),
       'userId': 'primary',
     };
   }
@@ -454,8 +514,6 @@ class DatabaseService {
         (row['name'] as String?) ?? '',
       );
     } on CryptoException catch (_) {
-      // Si le nom ne peut pas être déchiffré, on utilise la chaîne brute en
-      // dernier ressort pour ne pas perdre complètement l'entrée.
       name = (row['name'] as String?) ?? '';
     }
 
@@ -463,7 +521,6 @@ class DatabaseService {
     try {
       targetCents = (await CryptoService.decryptNumber('${row['target_cents']}')).round();
     } on CryptoException catch (_) {
-      // Échec du déchiffrement de la cible -> erreur explicite, pas de zéro silencieux
       throw CryptoException('DECRYPT_GOAL_TARGET',
           'Impossible de déchiffrer la cible du objectif ${row['id']}');
     }
@@ -472,9 +529,66 @@ class DatabaseService {
     try {
       savedCents = (await CryptoService.decryptNumber('${row['saved_cents']}')).round();
     } on CryptoException catch (_) {
-      // Échec du déchiffrement de l'épargne -> erreur explicite, pas de zéro silencieux
       throw CryptoException('DECRYPT_GOAL_SAVED',
           'Impossible de déchiffrer l'épargne du objectif ${row['id']}');
+    }
+
+    String category;
+    try {
+      category = await CryptoService.decrypt(row['category'] as String? ?? 'other');
+    } on CryptoException catch (_) {
+      category = 'other';
+    }
+
+    String? targetDate;
+    try {
+      final encrypted = row['target_date'] as String?;
+      if (encrypted != null && encrypted.isNotEmpty) {
+        targetDate = await CryptoService.decrypt(encrypted);
+      }
+    } on CryptoException catch (_) {
+      targetDate = null;
+    }
+
+    int? recurringAmountCents;
+    try {
+      final encrypted = row['recurring_amount_cents'];
+      if (encrypted != null) {
+        recurringAmountCents = (await CryptoService.decryptNumber('${encrypted}')).round();
+      }
+    } on CryptoException catch (_) {
+      recurringAmountCents = null;
+    }
+
+    String? recurringStartDate;
+    try {
+      final encrypted = row['recurring_start_date'] as String?;
+      if (encrypted != null && encrypted.isNotEmpty) {
+        recurringStartDate = await CryptoService.decrypt(encrypted);
+      }
+    } on CryptoException catch (_) {
+      recurringStartDate = null;
+    }
+
+    String milestones;
+    try {
+      milestones = await CryptoService.decrypt(row['milestones'] as String? ?? '[25,50,75,100]');
+    } on CryptoException catch (_) {
+      milestones = '[25,50,75,100]';
+    }
+
+    String createdAt;
+    try {
+      createdAt = await CryptoService.decrypt(row['created_at'] as String? ?? DateTime.now().toIso8601String());
+    } on CryptoException catch (_) {
+      createdAt = DateTime.now().toIso8601String();
+    }
+
+    String updatedAt;
+    try {
+      updatedAt = await CryptoService.decrypt(row['updated_at'] as String? ?? DateTime.now().toIso8601String());
+    } on CryptoException catch (_) {
+      updatedAt = DateTime.now().toIso8601String();
     }
 
     return GoalEntry(
@@ -482,6 +596,13 @@ class DatabaseService {
       name: name,
       targetCents: targetCents,
       savedCents: savedCents,
+      category: category,
+      targetDate: targetDate,
+      recurringAmountCents: recurringAmountCents,
+      recurringStartDate: recurringStartDate,
+      milestones: milestones,
+      createdAt: createdAt,
+      updatedAt: updatedAt,
       isDeleted: ((row['is_deleted'] as int?) ?? 0) == 1,
     );
   }
@@ -791,6 +912,8 @@ class DatabaseService {
       _migrationMessage = 'Vos données ont été migrées vers le chiffrement renforcé au démarrage précédent.';
     } else if (oldVersion < 5 && newVersion >= 5) {
       _migrationMessage = 'Vos budgets et objectifs ont été chiffrés pour une sécurité renforcée.';
+    } else if (oldVersion < 7 && newVersion >= 7) {
+      _migrationMessage = 'Vos objectifs d\'épargne ont été enrichis avec catégories, dates cibles et contributions récurrentes.';
     } else {
       _migrationMessage = null;
     }
