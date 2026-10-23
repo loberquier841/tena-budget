@@ -33,7 +33,7 @@ class SecureStorageKeyStore implements SecretKeyStore {
   final SecretKeyStore _fallback;
 
   const SecureStorageKeyStore({SecretKeyStore? fallback})
-    : _fallback = fallback ?? const _UnavailableKeyStore();
+    : _fallback = fallback ?? const _FallbackKeyStore();
 
   @override
   Future<String?> read() async {
@@ -72,8 +72,8 @@ class SecureStorageKeyStore implements SecretKeyStore {
 /// Sans ce repli, une erreur « clé absente » ferait porter à l'utilisateur la
 /// perte de ses données chiffrées. Ce magasin ne fonctionne pas : il rend
 /// l'échec visible et testable plutôt que silencieux.
-class _UnavailableKeyStore implements SecretKeyStore {
-  const _UnavailableKeyStore();
+class _FallbackKeyStore implements SecretKeyStore {
+  const _FallbackKeyStore();
 
   @override
   Future<String?> read() async => null;

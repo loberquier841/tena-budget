@@ -2,6 +2,8 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
+
+import { navigate } from 'next/navigation';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { auth } from '@/auth';
@@ -385,6 +387,17 @@ interface UserProfile {
 
 export default function DashboardView({ userId }: DashboardViewProps) {
   const pathname = usePathname();
+
+  // Check authentication on mount
+  useEffect(() => {
+    (async () => {
+      const session = await auth();
+      if (!session || !session.userId) {
+        navigate('/login');
+        return;
+      }
+    })();
+  }, []);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);

@@ -1,8 +1,13 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+
+import { navigate } from 'next/navigation';
 import { auth } from '@/auth';
-import { getLocalTransactions, LocalTransaction } from '@/sync/dexie';
+import { getLocalTransactions, getLocalCategories } from '@/sync/dexie';
+import { createTransaction, softDeleteTransaction, restoreTransaction, type LocalTransaction } from '@/budget/transaction';
+import { Role, assertCan, requiresOwnerConfirmation } from '@/permissions/permissions';
+import { toCents, centsToEurosDisplay } from '@/shared';
 
 export default function TransactionsFinalPage() {
   const [filters, setFilters] = useState({ personId: '', categoryId: '', source: '', minCents: '', maxCents: '', label: '', from: '', to: '' });
@@ -18,8 +23,93 @@ export default function TransactionsFinalPage() {
   const [error, setError] = useState<string | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [familyId, setFamilyId] = useState<string | null>(null);
+  const [role, setRole] = useState<'owner' | 'admin' | 'member' | 'child'>('member');
 
-  useEffect(() => {
+  // Form state for creating new transaction
+  const [form, setForm] = useState<{ label: string; amount: number; bookingDate: string; personId: string; source: string; notes?: string; categoryId?: string }>({
+    label: '',
+    amount: 0,
+    bookingDate: new Date().toISOString().split('T')[0],
+    personId: '',
+    source: 'manual',
+    notes: '',
+  });
+
+  // Handler for form field changes
+  const handleChange = useCallback((e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
+    const { name, value } = e.target;
+    setForm({ ...form, [name]: value });
+  }, []);
+
+  // Handler for amount input (keep in euros for display, convert on submit)
+  const handleAmountInput = useCallback((value: string) => {
+    const num = parseFloat(value) || 0;
+    setForm({ ...form, amount: num });
+  }, []);
+
+  // Handler for form submit - create new transaction
+  const handleSubmit = useCallback(async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+
+    try {
+      // Validate required fields
+      if (!form.label.trim()) {
+        throw new Error('Le libellé est obligatoire');
+      }
+
+      if (!form.personId) {
+        throw new Error('La personne est obligatoire pour les transactions');
+      }
+
+      // Convert amount from euros to cents (Int only)
+      const amountCents = toCents(form.amount);
+
+      // Validate amount is not zero
+      if (amountCents === 0) {
+        throw new Error('Le montant doit être non nul');
+      }
+
+      // Check owner confirmation for amounts >= 500€
+      const requiresConfirm = requiresOwnerConfirmation(amountCents);
+
+      // Create the transaction
+      const newTx = await createTransaction({
+        familyId: familyId || 'primary',
+        amountCents,
+        bookingDate: new Date(form.bookingDate),
+        label: form.label.trim(),
+        source: form.source,
+        categoryId: form.categoryId || undefined,
+        personId: form.personId,
+        notes: form.notes?.trim(),
+        createdByUserId: session?.userId || 'local-user',
+      }, role);
+
+      // Show success and reset form
+      setForm({
+        label: '',
+        amount: 0,
+        bookingDate: new Date().toISOString().split('T')[0],
+        personId: '',
+        source: 'manual',
+        notes: '',
+      });
+
+      // Reload transactions
+      const data = await getLocalTransactions(familyId);
+      setTransactions(data);
+
+      // Refresh success state
+      setError(null);
+
+    } catch (err: any) {
+      setError(err.message || 'Erreur lors de la création de la transaction');
+      console.error('Transaction creation error:', err);
+    }
+  }, [form, role, familyId, session]);
+
+  // Load family role and data
     (async () => {
       try {
         setLoading(true);
@@ -28,9 +118,8 @@ export default function TransactionsFinalPage() {
           setFamilyId(session.userId);
           setIsAuthenticated(true);
         } else {
-          setFamilyId(null);
-          setIsAuthenticated(false);
-          setError('Connexion requise pour accéder aux transactions');
+          navigate('/login');
+          setError('');
           setLoading(false);
           return;
         }
@@ -210,5 +299,6 @@ export default function TransactionsFinalPage() {
       </div>
 </div>
     </main>
+<div style={{ marginTop: 24, padding: 20, background: 'white', borderRadius: 12, border: '1px solid #e5e7eb' }}>\n  <h3 style={{ fontSize: 14, marginBottom: 16, color: '#111' }}>Nouvelle transaction</h3>\n  <form onSubmit={handleSubmit} style={{ display: 'grid', gap: 16 }}>\n    <div style={{ display: 'grid', gap: 8 }}}>\n      <label>Libellé <span style={{ color: '#ef4444' }}>*</span></label>\n      <input\n        type=\"text\"\n        name=\"label\"\n        value={form.label}\n        onChange={handleChange}\n        required\n        style={{ padding: 8, borderRadius: 6, border: '1px solid #e5e7eb', fontSize: 14 }}\n      <p style={{ fontSize: 11, color: '#ef4444' }}>{error}</p>\n    </div>\n    <div style={{ display: 'grid', gap: 8 }}}>\n      <label>Montant (€) <span style={{ color: '#ef4444' }}>*</span></label>\n      <input\n        type=\"number\"\n        name=\"amount\"\n        value={form.amount.toFixed(2)}\n        onChange={(e) => handleAmountChange(e.target.value)}\n        step=\"0.01\"\n        required\n        style={{ padding: 8, borderRadius: 6, border: '1px solid #e5e7eb', fontSize: 14 }}\n    </div>\n    <div style={{ display: 'grid', gap: 8 }}}>\n      <label>Date <span style={{ color: '#ef4444' }}>*</span></label>\n      <input\n        type=\"date\"\n        name=\"bookingDate\"\n        value={form.bookingDate}\n        onChange={handleChange}\n        required\n        style={{ padding: 8, borderRadius: 6, border: '1px solid #e5e7eb', fontSize: 14 }}\n    </div>\n    <div style={{ display: 'grid', gap: 8 }}}>\n      <label>Personne <span style={{ color: '#ef4444' }}>*</span></label>\n      <select\n        name=\"personId\"\n        value={form.personId}\n        onChange={handleChange}\n        required\n        style={{ padding: 8, borderRadius: 6, border: '1px solid #e5e7eb', fontSize: 14 }}\n      >\n        <option value=\"\">Sélectionner une personne</option>\n        {transactions.map((t) => (\n          <option key={t.personId} value={t.personId}>{t.person} ({t.personId})</option>\n        ))}\n      </select>\n    </div>\n    <div style={{ display: 'grid', gap: 8 }}}>\n      <label>Catégorie</label>\n      <select\n        name=\"categoryId\"\n        value={form.categoryId || ''}\n        onChange={handleChange}\n        style={{ padding: 8, borderRadius: 6, border: '1px solid #e5e7eb', fontSize: 14 }}\n      >\n        <option value=\"\">Aucune catégorie</option>\n        { /* Categories would be loaded from DB */ }}\n      </select>\n    </div>\n    <div style={{ display: 'grid', gap: 8 }}}>\n      <label>Source</label>\n      <select\n        name=\"source\"\n        value={form.source}\n        onChange={handleChange}\n        style={{ padding: 8, borderRadius: 6, border: '1px solid #e5e7eb', fontSize: 14 }}\n      >\n        <option value=\"manual\">Manuel</option>\n        <option value=\"import\">Import</option>\n        <option value=\"bank\">Banque</option>\n      </select>\n    </div>\n    <div style={{ display: 'grid', gap: 8 }}}>\n      <label>Notes (optionnel)</label>\n      <textarea\n        name=\"notes\"\n        rows={3}\n        value={form.notes || ''}\n        onChange={handleChange}\n        style={{ padding: 8, borderRadius: 6, border: '1px solid #e5e7eb', fontSize: 14 }}\n      ></textarea>\n    </div>\n    <button type=\"submit\" style={{ padding: '10px 20px', background: '#7C3AED', color: 'white', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 600 }}>\n      Créer la transaction\n    </button>\n  </form>\n</div>
   );
 }

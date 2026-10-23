@@ -4,6 +4,7 @@ import { Role, assertCan, requiresOwnerConfirmation } from "../permissions/permi
 export interface Transaction {
   id: string;
   familyId: string;
+  userId?: string; // Optionnel: isolateur multi-utilisateurs, défaut 'primary' dans Dexie v5
   amountCents: number; // Int, jamais float
   bookingDate: Date;
   label: string;
@@ -36,6 +37,7 @@ export function createTransaction(input: { familyId: string; amountCents: number
   return {
     id: `tx_${Date.now()}_${Math.random().toString(36).slice(2,6)}`,
     familyId: input.familyId,
+    userId: 'primary', // AJOUT: défaut compatible avec schema Dexie v5 et saveLocalTransaction
     amountCents: input.amountCents,
     bookingDate: input.bookingDate,
     label: input.label.trim(),
@@ -55,7 +57,7 @@ export function createTransaction(input: { familyId: string; amountCents: number
 export function updateTransaction(tx: Transaction, patch: { amountCents?: number; label?: string; categoryId?: string; personId?: string }, role: Role): Transaction {
   assertCan(role, "transaction:write");
   if (tx.isDeleted) throw new Error("TX_ALREADY_DELETED");
-  let updated = { ...tx };
+  let updated = { ...tx, userId: tx.userId || 'primary' };
   if (patch.amountCents !== undefined) {
     validateTransactionAmount(patch.amountCents);
     if (requiresOwnerConfirmation(patch.amountCents) && role !== "owner") throw new Error("TX_REQUIRES_OWNER_CONFIRMATION");

@@ -133,10 +133,20 @@ export default function OnboardingPage() {
             'householdMode', 'incomePattern', 'budgetExperience', 'priorities',
             'wantedFeatures', 'notificationPreference', 'summary',
           ];
-          const nextStepIndex = Math.min(Math.max(progress.currentStep, 1), TOTAL_STEPS - 1);
-          if (nextStepIndex < steps.length) {
-            setStep(steps[nextStepIndex]);
+          // Si l'onboarding est déjà terminé, aller directement en résumé
+          if (progress.status === 'completed' || progress.currentStep >= steps.length) {
+            setStep('summary');
+          } else {
+            const nextStepIndex = Math.min(Math.max(progress.currentStep, 1), steps.length - 1);
+            if (nextStepIndex < steps.length) {
+              setStep(steps[nextStepIndex]);
+            } else {
+              setStep('summary');
+            }
           }
+        } else if (!existing && !progress) {
+          // Rien encore, commencer depuis le début (créer le coffre)
+          setStep('vault');
         }
       } catch (err: any) {
         if (mounted) setError(err.message || 'Erreur de restauration');
@@ -181,7 +191,22 @@ export default function OnboardingPage() {
     }
   }, [passphrase, passphraseConfirm]);
 
-  const saveProgress = useCallback(async (currentStepIndex: number) => {
+  const recomputeCards = (priorities: UserPriority[]): DashboardCardId[] => {
+  const ordered: DashboardCardId[] = [];
+  const allCards: DashboardCardId[] = ['spending', 'goals', 'recent-transactions', 'alerts', 'forecast'];
+  const add = (...items: DashboardCardId[]) => items.forEach(item => { if (!ordered.includes(item)) ordered.push(item); });
+  for (const item of priorities) {
+    if (item === 'understand-money') add('spending', 'recent-transactions');
+    if (item === 'control-spending' || item === 'manage-debt') add('spending', 'alerts');
+    if (item === 'save') add('goals');
+    if (item === 'prepare-expenses') add('forecast', 'spending');
+    if (item === 'family-visibility') add('recent-transactions', 'goals');
+  }
+  add(...allCards);
+  return ordered;
+};
+
+const saveProgress = useCallback(async (currentStepIndex: number) => {
     if (!vaultReady) return;
     try {
       const now = new Date().toISOString();
@@ -193,12 +218,12 @@ export default function OnboardingPage() {
         startedAt: (answers as any).startedAt ?? now,
         updatedAt: now,
         answers: answers as OnboardingAnswers,
-        dashboard: { visibleCards: [], compact: false },
+        dashboard: { visibleCards: recomputeCards(answers.priorities ?? []), compact: false },
       });
     } catch (err: any) {
       setError(err.message || 'Erreur de sauvegarde de progression.');
     }
-  }, [vaultReady, answers]);
+  }, [vaultReady, answers, recomputeCards]);
 
   const goNext = useCallback(async () => {
     setError(null);
@@ -227,15 +252,25 @@ export default function OnboardingPage() {
     setError(null);
     setIsLoading(true);
     try {
+      // Validate answers before creating profile
       validateOnboardingAnswers(answers as OnboardingAnswers);
+      
+      // Create profile with métier functions
       const newProfile = createUserProfile(answers as OnboardingAnswers);
+      
+      // Persist profile encrypted in local vault
       await saveLocalUserProfile(newProfile);
+      
+      // Get recommendations based on profile
       const rec = recommendForProfile(newProfile);
+      
       setProfile(newProfile);
       setRecommendation(rec);
       setStep('done');
     } catch (err: any) {
       setError(err.message || 'Impossible de créer le profil.');
+      // Re-throw for logging, but show user-friendly message
+      console.error('Onboarding finish error:', err);
     } finally {
       setIsLoading(false);
     }

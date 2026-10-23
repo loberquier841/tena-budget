@@ -4,7 +4,7 @@ import { can } from "@tena/core/src/permissions/permissions";
 
 export default async function FamillePage() {
   const session = await auth();
-  if (!session) return <p>Non connecté — <a href="/login">Login</a></p>;
+  if (!session) redirect('/login');
   const role = "owner" as const; // TODO: fetch from DB
   return (
     <main>

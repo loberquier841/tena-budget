@@ -4,20 +4,26 @@
 # The issues identified by the analyzer are surfaced in the UI of Dart-enabled
 # IDEs (https://dart.dev/tools#ides-and-editors). The analyzer can also be
 # invoked from the command line by running `flutter analyze`.
-
+#
 # The following line activates a set of recommended lints for Flutter apps,
 # packages, and plugins designed to encourage good coding practices.
 include: package:flutter_lints/flutter.yaml
 
 analyzer:
+  # Exclude build directories and platform-specific folders.
+  # Previously, linux/** was excluded from analysis, which prevented detection
+  # of lint issues specific to the Linux platform. This exclusion has been
+  # removed to allow proper analysis of Linux-compatible code.
+  #
+  # Note: The Flutter web, mobile and desktop targets have their own analysis
+  # configurations. Linux-specific lints and issues should be detectable here.
   exclude:
     - build/**
     - android/**
     - ios/**
-    - web/**
     - windows/**
-    - macos/**
-    - linux/**
+    - macos/
+    # - linux/   <-- REMOVED: Was previously excluded, now included for analysis
 
 linter:
   # The lint rules applied to this project can be customized in the

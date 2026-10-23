@@ -3,7 +3,7 @@ import { auth } from "@/auth";
 
 export default async function RecurrentesPage() {
   const session = await auth();
-  if (!session) return <main style={{ marginLeft: 260, padding: 24 }}><p>Non connecté</p></main>;
+  if (!session) redirect('/login');
 
   const mockRules = [
     { id: 'rec1', label: 'Abonnement sport', amountCents: 3000, periodicity: 'weekly', day: 'Lundi (1)', next: '2026-06-02', person: 'Parent 1', status: 'active' },

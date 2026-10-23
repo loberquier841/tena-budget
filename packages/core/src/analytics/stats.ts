@@ -1,4 +1,3 @@
-
 import { Transaction } from "../budget/transaction";
 import { Budget, calculateRemaining } from "../budget/budget";
 import { Category } from "../budget/category";
@@ -15,6 +14,7 @@ export interface StatsFilters {
   includeGlobalOnly?: boolean; // true = seulement budgets familiaux sans personId
 }
 
+// Filtre les transactions valides (non supprimées, bonnes famille/personne/plage/ cat)
 export function filterValidTransactions(transactions: Transaction[], filters: StatsFilters): Transaction[] {
   return transactions.filter(t => {
     if (t.familyId !== filters.familyId) return false;
@@ -28,6 +28,7 @@ export function filterValidTransactions(transactions: Transaction[], filters: St
   });
 }
 
+// Répartition des dépenses par catégorie
 export function getSpendingByCategory(transactions: Transaction[], categories: Category[], filters: StatsFilters): { categoryId: string; categoryName: string; totalCents: number; count: number; subCategories: { subId: string; name: string; totalCents: number }[] }[] {
   const valid = filterValidTransactions(transactions, filters);
   const parents = categories.filter(c => !c.parentId && !c.isArchived);
@@ -43,6 +44,7 @@ export function getSpendingByCategory(transactions: Transaction[], categories: C
   }).filter(r => r.totalCents !== 0 || r.subCategories.some(sc => sc.totalCents !== 0));
 }
 
+// Répartition des dépenses par personne
 export function getSpendingByPerson(transactions: Transaction[], filters: Omit<StatsFilters, 'personId'>): { personId: string; totalCents: number; count: number }[] {
   const valid = filterValidTransactions(transactions, filters as any);
   const map = new Map<string, { totalCents: number; count: number }>();
@@ -56,6 +58,7 @@ export function getSpendingByPerson(transactions: Transaction[], filters: Omit<S
   return Array.from(map.entries()).map(([personId, v]) => ({ personId, totalCents: v.totalCents, count: v.count }));
 }
 
+// Évolution mensuelle des transactions
 export function getMonthlyEvolution(transactions: Transaction[], filters: StatsFilters): { year: number; month: number; totalCents: number; count: number }[] {
   const valid = filterValidTransactions(transactions, filters);
   const map = new Map<string, { year: number; month: number; totalCents: number; count: number }>();
@@ -64,35 +67,20 @@ export function getMonthlyEvolution(transactions: Transaction[], filters: StatsF
     const month = t.bookingDate.getMonth() + 1;
     const key = `${year}-${month}`;
     const entry = map.get(key) || { year, month, totalCents: 0, count: 0 };
-    entry.totalCents += t.amountCents;
+    entry.totalCents += t.amountCents; // Int
     entry.count += 1;
     map.set(key, entry);
   }
-  return Array.from(map.values()).sort((a,b) => a.year !== b.year ? a.year - b.year : a.month - b.month);
+  return Array.from(map.values()).sort((a, b) => a.year - b.year || a.month - b.month);
 }
 
-export function getAnnualEvolution(transactions: Transaction[], filters: StatsFilters): { year: number; totalCents: number; count: number }[] {
-  const valid = filterValidTransactions(transactions, filters);
-  const map = new Map<number, { year: number; totalCents: number; count: number }>();
-  for (const t of valid) {
-    const year = t.bookingDate.getFullYear();
-    const entry = map.get(year) || { year, totalCents: 0, count: 0 };
-    entry.totalCents += t.amountCents;
-    entry.count += 1;
-    map.set(year, entry);
-  }
-  return Array.from(map.values()).sort((a,b) => a.year - b.year);
-}
-
+// Évolution mensuelle des budgets vs dépenses
 export function getBudgetVsSpent(budgets: Budget[], transactions: Transaction[], filters: StatsFilters & { year?: number; month?: number }): { budgetId: string; type: string; year: number; month?: number; categoryId?: string; personId?: string; budgetedCents: number; spentCents: number; remainingCents: number }[] {
   let filteredBudgets = budgets.filter(b => b.familyId === filters.familyId);
   if (filters.year !== undefined) filteredBudgets = filteredBudgets.filter(b => b.year === filters.year);
   if (filters.month !== undefined) filteredBudgets = filteredBudgets.filter(b => b.type === 'monthly' ? b.month === filters.month : true);
   if (filters.personId) {
-    // Ne jamais mélanger: si personId filtré, on prend budgets avec ce personId OU globaux si includeGlobalOnly false?
-    // Règle: si personId demandé, on retourne seulement budgets de cette personne + on calcule avec transactions de cette personne
-    filteredBudgets = filteredBudgets.filter(b => b.personId === filters.personId || !b.personId && !filters.personId); // si filtre personne, on garde seulement ceux de la personne
-    // Pour strict no mixing: si personId filtré, on exclut globaux
+    filteredBudgets = filteredBudgets.filter(b => b.personId === filters.personId || !b.personId && !filters.personId);
     if (filters.personId) filteredBudgets = filteredBudgets.filter(b => b.personId === filters.personId);
   }
   if (filters.includeGlobalOnly) filteredBudgets = filteredBudgets.filter(b => !b.personId);
@@ -119,6 +107,7 @@ export function getBudgetVsSpent(budgets: Budget[], transactions: Transaction[],
   });
 }
 
+// Statistiques d'épargne
 export function getSavingsStats(goals: SavingGoal[], filters: StatsFilters): { goalId: string; name: string; personId?: string; targetCents: number; currentCents: number; remainingCents: number; percentInt: number; isExceeded: boolean }[] {
   let filtered = goals.filter(g => g.familyId === filters.familyId && !g.isDeleted);
   if (filters.personId) filtered = filtered.filter(g => g.personId === filters.personId);

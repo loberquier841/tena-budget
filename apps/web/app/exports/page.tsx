@@ -3,7 +3,7 @@ import { auth } from "@/auth";
 
 export default async function ExportsPage() {
   const session = await auth();
-  if (!session) return <p>Non connecté</p>;
+  if (!session) redirect('/login');
 
   return (
     <main style={{ padding: 24 }}>
