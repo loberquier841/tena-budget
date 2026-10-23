@@ -1,10 +1,9 @@
+import { ResponsiveNav } from '@/components/ResponsiveNav';
 
 export const metadata = {
   title: 'TENΛ Budget — Ton budget. Tes choix. Ta liberté.',
   description: 'Gère ton budget avec TENΛ Budget : une approche gratuite, locale et pensée pour garder tes données sous ton contrôle.',
 };
-
-import { ResponsiveNav } from '@/components/ResponsiveNav';
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
