@@ -40,8 +40,8 @@
 }
 .brand b { color: #aaaab4; font-size: .82em; }
 .mark {
-  display: grid; place-items: center; width: 38px; height: 38px; border-radius: 12px;
-  background: linear-gradient(135deg, #f6d982, #b58b2a); color: #101014; font-size: 21px;
+  display: block; width: 38px; height: 38px; padding: 4px; border-radius: 12px;
+  border: 1px solid #d4af3747; background: #d4af371a; object-fit: contain;
 }
 .navLinks { display: flex; align-items: center; gap: 28px; }
 .navLinks a, .footer nav a {
