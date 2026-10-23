@@ -13,7 +13,8 @@ class FinanceService {
     final transactions = await getTransactions();
 
     final monthTransactions = transactions.where((transaction) {
-      return transaction.date.year == month.year &&
+      return !transaction.isDeleted &&
+          transaction.date.year == month.year &&
           transaction.date.month == month.month;
     }).toList();
 
@@ -21,10 +22,19 @@ class FinanceService {
     double expenses = 0;
 
     for (final transaction in monthTransactions) {
-      if (transaction.type == TransactionType.income) {
-        income += transaction.amount;
-      } else {
-        expenses += transaction.amount;
+      if (transaction.isDeleted) continue;
+
+      switch (transaction.type) {
+        case TransactionType.income:
+          income += transaction.amount;
+          break;
+        case TransactionType.expense:
+          expenses += transaction.amount;
+          break;
+        case TransactionType.transfer:
+          // Un transfert déplace de l'argent sans créer un revenu
+          // ni une dépense à l'échelle du budget global.
+          break;
       }
     }
 
@@ -44,10 +54,18 @@ class FinanceService {
     double expenses = 0;
 
     for (final transaction in transactions) {
-      if (transaction.type == TransactionType.income) {
-        income += transaction.amount;
-      } else {
-        expenses += transaction.amount;
+      if (transaction.isDeleted) continue;
+
+      switch (transaction.type) {
+        case TransactionType.income:
+          income += transaction.amount;
+          break;
+        case TransactionType.expense:
+          expenses += transaction.amount;
+          break;
+        case TransactionType.transfer:
+          // Un transfert ne doit pas fausser le revenu ou la dépense globale.
+          break;
       }
     }
 

@@ -1,6 +1,7 @@
 enum TransactionType {
   income,
   expense,
+  transfer,
 }
 
 class Transaction {
