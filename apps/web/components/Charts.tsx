@@ -24,7 +24,7 @@ export function CategoryChart({ data }: { data: { name: string; totalCents: numb
           </div>
         );
       })}
-      <p style={{ fontSize: 11, color: '#a7a8b2' }}>
+      <p style={{ fontSize: 11, color: '#a0a0ab' }}>
         Total : {(total / 100).toFixed(2)}€
       </p>
     </div>
@@ -59,7 +59,7 @@ export function MonthlyChart({ data }: { data: { month: string; totalCents: numb
               aria-hidden="true"
               style={{ alignSelf: 'end', width: '100%', height: `${height}%`, minHeight: 6, background: 'linear-gradient(180deg, #e8cc6a, #8a7434)', borderRadius: '5px 5px 2px 2px' }}
             />
-            <span aria-hidden="true" style={{ color: '#a7a8b2', fontSize: 9 }}>{item.month}</span>
+            <span aria-hidden="true" style={{ color: '#a0a0ab', fontSize: 9 }}>{item.month}</span>
           </div>
         );
       })}
