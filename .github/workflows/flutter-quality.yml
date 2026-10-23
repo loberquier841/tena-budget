@@ -1,0 +1,39 @@
+name: Flutter quality
+on:
+  pull_request:
+    paths:
+      - "tena_app/**"
+      - ".github/workflows/flutter-quality.yml"
+  push:
+    branches: [main]
+    paths:
+      - "tena_app/**"
+      - ".github/workflows/flutter-quality.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: flutter-quality-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  flutter:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: tena_app
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Show toolchain
+        run: flutter --version
+      - name: Resolve dependencies
+        run: flutter pub get
+      - name: Analyze Dart and Flutter code
+        run: flutter analyze
+      - name: Run automated tests
+        run: flutter test --reporter expanded

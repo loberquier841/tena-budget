@@ -49,7 +49,7 @@ class ForecastService {
     double totalExpenses = 0;
     double totalIncome = 0;
 
-    for (final transaction in transactions) {
+    for (final transaction in relevantTransactions) {
       if (transaction.type == TransactionType.expense) {
         totalExpenses += transaction.amount;
       } else if (transaction.type == TransactionType.income) {
