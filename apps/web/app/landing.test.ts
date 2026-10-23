@@ -1,5 +1,8 @@
+import { createElement } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
+import { MonthlyChart } from '../components/Charts';
 
 const page = readFileSync(new URL('./page.tsx', import.meta.url), 'utf8');
 const styles = readFileSync(new URL('./landing.module.css', import.meta.url), 'utf8');
@@ -28,6 +31,21 @@ describe('TENΛ Budget landing page', () => {
     for (const className of usedClasses) {
       expect(definedClasses, `Missing CSS selector for styles.${className}`).toContain(className);
     }
+  });
+
+  it('renders the existing monthly chart accessibly and handles zero-value weeks', () => {
+    const markup = renderToStaticMarkup(
+      createElement(MonthlyChart, {
+        data: [
+          { month: 'Sem. 1', totalCents: 28000 },
+          { month: 'Sem. 2', totalCents: 0 },
+        ],
+      }),
+    );
+
+    expect(markup).toContain('aria-label="Évolution mensuelle des dépenses"');
+    expect(markup).toContain('Sem. 1');
+    expect(markup).toContain('height:6%');
   });
 
   it('uses the same dark and gold brand colors as the website', () => {
