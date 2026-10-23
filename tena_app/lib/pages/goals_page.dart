@@ -41,8 +41,8 @@ class _GoalsPageState extends State<GoalsPage> {
 
     await GoalService.addGoal(
       name: result.name,
-      target: result.target,
-      saved: result.saved,
+      targetEuros: result.targetEuros,
+      savedEuros: result.savedEuros,
     );
 
     await _load();
@@ -56,8 +56,8 @@ class _GoalsPageState extends State<GoalsPage> {
     await GoalService.updateGoal(
       goal.copyWith(
         name: result.name,
-        target: result.target,
-        saved: result.saved,
+        targetCents: (result.targetEuros * 100).round(),
+        savedCents: (result.savedEuros * 100).round(),
       ),
     );
 
@@ -99,12 +99,12 @@ class _GoalsPageState extends State<GoalsPage> {
         final targetController = TextEditingController(
           text: goal == null
               ? ''
-              : goal.target.toStringAsFixed(2).replaceAll('.', ','),
+              : goal.targetEuros.toStringAsFixed(2).replaceAll('.', ','),
         );
         final savedController = TextEditingController(
           text: goal == null
               ? '0'
-              : goal.saved.toStringAsFixed(2).replaceAll('.', ','),
+              : goal.savedEuros.toStringAsFixed(2).replaceAll('.', ','),
         );
 
         return AlertDialog(
@@ -173,7 +173,7 @@ class _GoalsPageState extends State<GoalsPage> {
 
                 Navigator.pop(
                   dialogContext,
-                  _GoalFormResult(name: name, target: target, saved: saved),
+                  _GoalFormResult(name: name, targetEuros: target, savedEuros: saved),
                 );
               },
               child: const Text('Enregistrer'),
@@ -252,11 +252,10 @@ class _GoalsPageState extends State<GoalsPage> {
               )
             else
               ..._goals.map((goal) {
-                final progress = goal.target <= 0
-                    ? 0.0
-                    : (goal.saved / goal.target).clamp(0.0, 1.0);
+                final progress = goal.progress;
 
-                final remaining = goal.target - goal.saved;
+                final remainingCents = goal.targetCents - goal.savedCents;
+                final remainingEuros = remainingCents / 100;
 
                 return Card(
                   margin: const EdgeInsets.only(bottom: 14),
@@ -291,21 +290,21 @@ class _GoalsPageState extends State<GoalsPage> {
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
                             Text(
-                              _money(goal.saved),
+                              _money(goal.savedEuros),
                               style: const TextStyle(
                                 fontSize: 22,
                                 fontWeight: FontWeight.bold,
                               ),
                             ),
-                            Text('/ ${_money(goal.target)}'),
+                            Text('/ ${_money(goal.targetEuros)}'),
                           ],
                         ),
                         const SizedBox(height: 10),
                         LinearProgressIndicator(value: progress, minHeight: 10),
                         const SizedBox(height: 10),
                         Text(
-                          remaining > 0
-                              ? 'Il reste ${_money(remaining)}'
+                          remainingEuros > 0
+                              ? 'Il reste ${_money(remainingEuros)}'
                               : 'Objectif atteint 🎉',
                         ),
                       ],
@@ -322,12 +321,12 @@ class _GoalsPageState extends State<GoalsPage> {
 
 class _GoalFormResult {
   final String name;
-  final double target;
-  final double saved;
+  final double targetEuros;
+  final double savedEuros;
 
   const _GoalFormResult({
     required this.name,
-    required this.target,
-    required this.saved,
+    required this.targetEuros,
+    required this.savedEuros,
   });
 }

@@ -23,9 +23,10 @@ class FinanceService {
     for (final transaction in monthTransactions) {
       if (transaction.type == TransactionType.income) {
         income += transaction.amount;
-      } else {
+      } else if (transaction.type == TransactionType.expense) {
         expenses += transaction.amount;
       }
+      // TransactionType.transfer is excluded from both income and expenses
     }
 
     return FinanceSummary(
@@ -46,9 +47,10 @@ class FinanceService {
     for (final transaction in transactions) {
       if (transaction.type == TransactionType.income) {
         income += transaction.amount;
-      } else {
+      } else if (transaction.type == TransactionType.expense) {
         expenses += transaction.amount;
       }
+      // TransactionType.transfer is excluded from both income and expenses
     }
 
     return FinanceSummary(

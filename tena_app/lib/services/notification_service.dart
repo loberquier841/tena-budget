@@ -241,15 +241,15 @@ class NotificationRules {
 
   /// Signale les objectifs atteints ou presque atteints.
   static List<BudgetNotification> checkGoals({
-    required List<({String name, double target, double saved})> goals,
+    required List<({String name, double targetEuros, double savedEuros})> goals,
     required DateTime now,
   }) {
     final notifications = <BudgetNotification>[];
 
     for (final goal in goals) {
-      if (goal.target <= 0) continue;
+      if (goal.targetEuros <= 0) continue;
 
-      final ratio = goal.saved / goal.target;
+      final ratio = goal.savedEuros / goal.targetEuros;
 
       if (ratio >= 1) {
         notifications.add(
@@ -257,7 +257,7 @@ class NotificationRules {
             id: 'objectif_atteint_${goal.name}',
             title: 'Objectif atteint : ${goal.name}',
             message:
-                'Tu as épargné les ${NotificationService.money(goal.target)} '
+                'Tu as épargné les ${NotificationService.money(goal.targetEuros)} '
                 'pour « ${goal.name} ».',
             severity: NotificationSeverity.info,
             createdAt: now,
@@ -271,8 +271,8 @@ class NotificationRules {
             title: 'Objectif presque atteint : ${goal.name}',
             message:
                 '${(ratio * 100).round()} % de « ${goal.name} » épargnés '
-                '(${NotificationService.money(goal.saved)} / '
-                '${NotificationService.money(goal.target)}).',
+                '(${NotificationService.money(goal.savedEuros)} / '
+                '${NotificationService.money(goal.targetEuros)}).',
             severity: NotificationSeverity.warning,
             createdAt: now,
             pageIndex: NotificationService.pageGoals,

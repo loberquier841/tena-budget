@@ -358,6 +358,10 @@ class _TransactionsPageState extends State<TransactionsPage> {
                       value: TransactionType.income,
                       child: Text('Revenus'),
                     ),
+                    PopupMenuItem(
+                      value: TransactionType.transfer,
+                      child: Text('Transferts'),
+                    ),
                   ],
                   child: const IconButton(
                     onPressed: null,
@@ -667,6 +671,11 @@ class _TransactionDialogState extends State<_TransactionDialog> {
                     value: TransactionType.income,
                     label: Text('Revenu'),
                     icon: Icon(Icons.arrow_downward),
+                  ),
+                  ButtonSegment(
+                    value: TransactionType.transfer,
+                    label: Text('Transfert'),
+                    icon: Icon(Icons.swap_horiz),
                   ),
                 ],
                 selected: {_type},

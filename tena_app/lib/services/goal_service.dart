@@ -5,38 +5,47 @@ import 'database_service.dart' as database_service;
 class Goal {
   final String id;
   final String name;
-  final double target;
-  final double saved;
+  final int targetCents;
+  final int savedCents;
 
   const Goal({
     required this.id,
     required this.name,
-    required this.target,
-    required this.saved,
+    required this.targetCents,
+    required this.savedCents,
   });
 
-  Goal copyWith({String? name, double? target, double? saved}) {
+  /// Montant cible en euros (pour l'affichage)
+  double get targetEuros => targetCents / 100;
+
+  /// Montant épargné en euros (pour l'affichage)
+  double get savedEuros => savedCents / 100;
+
+  /// Progression en pourcentage (0.0 à 1.0)
+  double get progress => targetCents > 0 ? savedCents / targetCents : 0.0;
+
+  Goal copyWith({String? name, int? targetCents, int? savedCents}) {
     return Goal(
       id: id,
       name: name ?? this.name,
-      target: target ?? this.target,
-      saved: saved ?? this.saved,
+      targetCents: targetCents ?? this.targetCents,
+      savedCents: savedCents ?? this.savedCents,
     );
   }
 
   Map<String, dynamic> toJson() => {
     'id': id,
     'name': name,
-    'target': target,
-    'saved': saved,
+    'targetCents': targetCents,
+    'savedCents': savedCents,
   };
 
   factory Goal.fromJson(Map<String, dynamic> json) {
     return Goal(
       id: json['id'] as String,
       name: json['name'] as String,
-      target: (json['target'] as num).toDouble(),
-      saved: (json['saved'] as num).toDouble(),
+      targetCents: (json['targetCents'] as num).toInt(),
+      savedCents: (json['savedCents'] as num).toInt(),
     );
   }
 
@@ -45,8 +54,8 @@ class Goal {
     return Goal(
       id: entry.id,
       name: entry.name,
-      target: entry.targetCents,
-      saved: entry.savedCents,
+      targetCents: entry.targetCents,
+      savedCents: entry.savedCents,
     );
   }
 }
@@ -64,16 +73,16 @@ class GoalService {
       await _db.insertGoal(database_service.GoalEntry(
         id: goal.id,
         name: goal.name,
-        targetCents: goal.target,
-        savedCents: goal.saved,
+        targetCents: goal.targetCents,
+        savedCents: goal.savedCents,
       ));
     }
   }
 
   static Future<void> addGoal({
     required String name,
-    required double target,
-    double saved = 0,
+    required double targetEuros,
+    double savedEuros = 0,
   }) async {
     final goals = await getGoals();
 
@@ -81,8 +90,8 @@ class GoalService {
       Goal(
         id: DateTime.now().microsecondsSinceEpoch.toString(),
         name: name.trim(),
-        target: target,
-        saved: saved,
+        targetCents: (targetEuros * 100).round(),
+        savedCents: (savedEuros * 100).round(),
       ),
     );
 
@@ -93,8 +102,8 @@ class GoalService {
     await _db.insertGoal(database_service.GoalEntry(
       id: updatedGoal.id,
       name: updatedGoal.name,
-      targetCents: updatedGoal.target,
-      savedCents: updatedGoal.saved,
+      targetCents: updatedGoal.targetCents,
+      savedCents: updatedGoal.savedCents,
     ));
   }
 

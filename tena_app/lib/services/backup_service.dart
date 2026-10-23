@@ -406,7 +406,9 @@ class BackupService {
       date: DateTime.parse(json['date'] as String),
       type: json['type'] == 'income'
           ? TransactionType.income
-          : TransactionType.expense,
+          : json['type'] == 'transfer'
+              ? TransactionType.transfer
+              : TransactionType.expense,
       notes: json['notes'] as String? ?? '',
       isDeleted: json['isDeleted'] as bool? ?? false,
     );

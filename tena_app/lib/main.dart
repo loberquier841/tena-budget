@@ -369,9 +369,10 @@ class _DashboardPageState extends State<DashboardPage> {
 
       if (transaction.type == TransactionType.income) {
         current.income += transaction.amount;
-      } else {
+      } else if (transaction.type == TransactionType.expense) {
         current.expenses += transaction.amount;
       }
+      // TransactionType.transfer is excluded from both income and expenses
 
       totals[day] = current;
     }
@@ -1163,8 +1164,8 @@ class _DashboardPageState extends State<DashboardPage> {
                     padding: const EdgeInsets.only(bottom: TenaSpacing.md),
                     child: _GoalPreviewRow(
                       name: goal.name,
-                      saved: goal.saved,
-                      target: goal.target,
+                      saved: goal.savedEuros,
+                      target: goal.targetEuros,
                     ),
                   ),
                 ),

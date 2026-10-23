@@ -87,7 +87,7 @@ class ReportService {
     for (final transaction in monthTransactions) {
       if (transaction.type == TransactionType.income) {
         income += transaction.amount;
-      } else {
+      } else if (transaction.type == TransactionType.expense) {
         expenses += transaction.amount;
 
         byCategory.update(
@@ -96,6 +96,7 @@ class ReportService {
           ifAbsent: () => transaction.amount,
         );
       }
+      // TransactionType.transfer is excluded from both income and expenses
     }
 
     // Le total par catégorie est ramené à une clé connue pour éviter que la

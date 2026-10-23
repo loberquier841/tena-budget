@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:csv/csv.dart';
 import 'package:path/path.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 // IMPORTANT : ne pas supprimer cet import.
@@ -30,11 +31,12 @@ class BudgetEntry {
 }
 
 /// Modèle léger pour un objectif d'épargne (lu/écrit via [DatabaseService]).
+/// Montants stockés en centimes (entiers) pour éviter les erreurs de précision floating-point.
 class GoalEntry {
   final String id;
   final String name;
-  final double targetCents;
-  final double savedCents;
+  final int targetCents;
+  final int savedCents;
   final bool isDeleted;
 
   const GoalEntry({
@@ -73,7 +75,17 @@ class DatabaseService {
   /// v3 : chiffrement AES-GCM des transactions existantes.
   /// v4 : profil/questionnaire local chiffré; migration additive.
   /// v5 : tables budgets et objectives chiffrées, cohérentes avec les transactions.
-  static const int _schemaVersion = 5;
+  static const int _schemaVersion = 6;
+
+  /// Version stockée dans la base de données (lue au premier accès).
+  /// Si cette version est inférieure à _schemaVersion, des migrations sont
+  /// nécessaires. On indique la version courante pour que les utilisateurs
+  /// sachent quand une mise à jour de schéma est en cours.
+  static int _storedSchemaVersion = 0;
+
+  /// Message d'information affiché au premier démarrage si des données en
+  /// clair sont détectées et en cours de migration vers le chiffrement.
+  static String? _migrationMessage;
 
   Future<Database> _initDatabase() async {
     if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
@@ -110,6 +122,16 @@ class DatabaseService {
           await _createGoalsSchema(db);
         }
 
+        if (oldVersion < 6) {
+          await _migrateToV6(db);
+        }
+
+        // Mise à jour de la version stockée après toutes les migrations
+        _storedSchemaVersion = newVersion;
+        // Vérifier s'il y a eu migration de données en clair
+        _checkAndSetMigrationMessage(oldVersion, newVersion);
+      },
+
         await _createIndexes(db);
       },
     );
@@ -126,7 +148,8 @@ class DatabaseService {
         date TEXT NOT NULL,
         type TEXT NOT NULL,
         notes TEXT NOT NULL DEFAULT '',
-        is_deleted INTEGER NOT NULL DEFAULT 0
+        is_deleted INTEGER NOT NULL DEFAULT 0,
+        userId TEXT NOT NULL DEFAULT 'primary'
       )
     ''');
 
@@ -153,7 +176,8 @@ class DatabaseService {
         category TEXT,
         amount_cents TEXT NOT NULL,
         is_deleted INTEGER NOT NULL DEFAULT 0,
-        updated_at TEXT NOT NULL
+        updated_at TEXT NOT NULL,
+        userId TEXT NOT NULL DEFAULT 'primary'
       )
     ''');
   }
@@ -167,7 +191,8 @@ class DatabaseService {
         target_cents TEXT NOT NULL,
         saved_cents TEXT NOT NULL,
         is_deleted INTEGER NOT NULL DEFAULT 0,
-        updated_at TEXT NOT NULL
+        updated_at TEXT NOT NULL,
+        userId TEXT NOT NULL DEFAULT 'primary'
       )
     ''');
   }
@@ -205,6 +230,21 @@ class DatabaseService {
     }
   }
 
+    /// Migration v5 -> v6 : ajoute l'isolateur `userId` pour séparation multi-utilisateurs.
+  /// Toutes les nouvelles lignes reçoivent `userId = 'primary'` par défaut,
+  /// assurant la compatibilité avec les données existantes.
+  Future<void> _migrateToV6(Database db) async {
+    await db.execute(
+      'ALTER TABLE transactions ADD COLUMN userId TEXT NOT NULL DEFAULT "primary"',
+    );
+    await db.execute(
+      'ALTER TABLE budgets ADD COLUMN userId TEXT NOT NULL DEFAULT "primary"',
+    );
+    await db.execute(
+      'ALTER TABLE goals ADD COLUMN userId TEXT NOT NULL DEFAULT "primary"',
+    );
+  }
+
   Future<void> _createIndexes(Database db) async {
     await db.execute(
       'CREATE INDEX IF NOT EXISTS idx_transactions_date ON transactions(date)',
@@ -226,12 +266,13 @@ class DatabaseService {
     return {
       'id': transaction.id,
       'amount': await CryptoService.encryptNumber(transaction.amount),
-      'category': transaction.category,
+      'category': await CryptoService.encrypt(transaction.category),
       'description': await CryptoService.encrypt(transaction.description),
-      'date': transaction.date.toIso8601String(),
-      'type': transaction.type.name,
+      'date': await CryptoService.encrypt(transaction.date.toIso8601String()),
+      'type': await CryptoService.encrypt(transaction.type.name),
       'notes': await CryptoService.encrypt(transaction.notes),
       'is_deleted': transaction.isDeleted ? 1 : 0,
+      'userId': 'primary',
     };
   }
 
@@ -253,35 +294,21 @@ class DatabaseService {
     return model.Transaction(
       id: row['id'] as String,
       amount: amount,
-      category: row['category'] as String,
+      category: await CryptoService.decrypt(row['category'] as String) as String,
       description: await CryptoService.decrypt(
         (row['description'] as String?) ?? '',
       ),
-      date: DateTime.parse(row['date'] as String),
-      type: row['type'] == 'income'
-          ? model.TransactionType.income
-          : model.TransactionType.expense,
-      isDeleted: ((row['is_deleted'] as int?) ?? 0) == 1,
-    );
-  }
       notes: await CryptoService.decrypt((row['notes'] as String?) ?? ''),
+      date: DateTime.parse(await CryptoService.decrypt(row['date'] as String)),
+      type: model.TransactionType.values.byName(
+          await CryptoService.decrypt(row['type'] as String)
+        ),
       isDeleted: ((row['is_deleted'] as int?) ?? 0) == 1,
-    );
-  }
-
-  Future<void> insertTransaction(model.Transaction transaction) async {
-    final db = await database;
-
-    await db.insert(
-      'transactions',
-      await _toRow(transaction),
-      conflictAlgorithm: ConflictAlgorithm.replace,
     );
   }
 
   /// Enregistre le JSON versionné du profil sous forme chiffrée AES-GCM.
   Future<void> saveUserProfilePayload(String jsonPayload) async {
-    final db = await database;
     await db.insert('user_profile', {
       'id': 'primary',
       'payload': await CryptoService.encrypt(jsonPayload),
@@ -289,7 +316,6 @@ class DatabaseService {
   }
 
   Future<String?> getUserProfilePayload() async {
-    final db = await database;
     final rows = await db.query(
       'user_profile',
       where: 'id = ?',
@@ -301,7 +327,6 @@ class DatabaseService {
   }
 
   Future<void> updateTransaction(model.Transaction transaction) async {
-    final db = await database;
 
     await db.update(
       'transactions',
@@ -314,7 +339,6 @@ class DatabaseService {
   /// Suppression logique : aucune donnée financière n'est réellement effacée,
   /// la transaction peut être restaurée via [restoreTransaction].
   Future<void> deleteTransaction(String id) async {
-    final db = await database;
 
     await db.update(
       'transactions',
@@ -326,7 +350,6 @@ class DatabaseService {
 
   /// Restaure une transaction supprimée logiquement.
   Future<void> restoreTransaction(String id) async {
-    final db = await database;
 
     await db.update(
       'transactions',
@@ -339,7 +362,6 @@ class DatabaseService {
   /// Suppression définitive, réservée à l'effacement explicite demandé par
   /// l'utilisateur (RGPD). Elle n'est jamais appelée par l'écran Transactions.
   Future<void> purgeTransaction(String id) async {
-    final db = await database;
 
     await db.delete('transactions', where: 'id = ?', whereArgs: [id]);
   }
@@ -348,14 +370,16 @@ class DatabaseService {
   /// remontent ni dans les totaux, ni dans le graphique.
   Future<List<model.Transaction>> getTransactions({
     bool includeDeleted = false,
+    String userId = 'primary',
   }) async {
-    final db = await database;
 
     final rows = await db.query(
       'transactions',
-      where: includeDeleted ? null : 'is_deleted = 0',
-      orderBy: 'date DESC',
-    );
+      where: includeDeleted ? 'userId = ?' : 'userId = ? AND is_deleted = 0',
+      whereArgs: [userId],
+      // orderBy retiré : SQLite ne peut pas trier chronologiquement des dates
+      // chiffrées par AES-GCM. Le tri sera appliqué après déchiffrement.
+    )
 
     // `_toTransaction` déchiffre chaque ligne : le déchiffrement est asynchrone,
     // la liste est donc construite champ par champ.
@@ -365,6 +389,11 @@ class DatabaseService {
       transactions.add(await _toTransaction(row));
     }
 
+    // ✅ Tri après déchiffrement : garanti chronologique décroissant
+    // Puisque le tri SQL ne peut pas agir sur des valeurs chiffrées,
+    // nous trions ici par DateTime pour assurer l'ordre attendu par l'application.
+    transactions.sort((a, b) => b.date.compareTo(a.date));
+
     return transactions;
   }
 
@@ -372,10 +401,11 @@ class DatabaseService {
   Future<Map<String, Object?>> _budgetToRow(BudgetEntry budget) async {
     return {
       'id': budget.id,
-      'category': budget.category,
+      'category': budget.category != null ? await CryptoService.encrypt(budget.category!) : null,
       'amount_cents': await CryptoService.encryptNumber(budget.amountCents),
       'is_deleted': budget.isDeleted ? 1 : 0,
       'updated_at': DateTime.now().toIso8601String(),
+      'userId': 'primary',
     };
   }
 
@@ -395,7 +425,7 @@ class DatabaseService {
     }
     return BudgetEntry(
       id: row['id'] as String,
-      category: row['category'] as String?,
+      category: await CryptoService.decrypt(row['category'] as String) as String?,
       amountCents: amountCents,
       isDeleted: ((row['is_deleted'] as int?) ?? 0) == 1,
     );
@@ -406,10 +436,11 @@ class DatabaseService {
     return {
       'id': goal.id,
       'name': await CryptoService.encrypt(goal.name),
-      'target_cents': await CryptoService.encryptNumber(goal.targetCents),
-      'saved_cents': await CryptoService.encryptNumber(goal.savedCents),
+      'target_cents': await CryptoService.encryptNumber(goal.targetCents.toDouble()),
+      'saved_cents': await CryptoService.encryptNumber(goal.savedCents.toDouble()),
       'is_deleted': goal.isDeleted ? 1 : 0,
       'updated_at': DateTime.now().toIso8601String(),
+      'userId': 'primary',
     };
   }
 
@@ -428,18 +459,18 @@ class DatabaseService {
       name = (row['name'] as String?) ?? '';
     }
 
-    double targetCents;
+    int targetCents;
     try {
-      targetCents = await CryptoService.decryptNumber('${row['target_cents']}');
+      targetCents = (await CryptoService.decryptNumber('${row['target_cents']}')).round();
     } on CryptoException catch (_) {
       // Échec du déchiffrement de la cible -> erreur explicite, pas de zéro silencieux
       throw CryptoException('DECRYPT_GOAL_TARGET',
           'Impossible de déchiffrer la cible du objectif ${row['id']}');
     }
 
-    double savedCents;
+    int savedCents;
     try {
-      savedCents = await CryptoService.decryptNumber('${row['saved_cents']}');
+      savedCents = (await CryptoService.decryptNumber('${row['saved_cents']}')).round();
     } on CryptoException catch (_) {
       // Échec du déchiffrement de l'épargne -> erreur explicite, pas de zéro silencieux
       throw CryptoException('DECRYPT_GOAL_SAVED',
@@ -458,7 +489,6 @@ class DatabaseService {
   // ── Budgets ──────────────────────────────────────────────────────────
 
   Future<void> insertBudget(BudgetEntry budget) async {
-    final db = await database;
 
     await db.insert(
       'budgets',
@@ -468,7 +498,6 @@ class DatabaseService {
   }
 
   Future<void> updateBudget(BudgetEntry budget) async {
-    final db = await database;
 
     await db.update(
       'budgets',
@@ -480,7 +509,6 @@ class DatabaseService {
 
   /// Suppression logique d'un budget.
   Future<void> deleteBudget(String id) async {
-    final db = await database;
 
     await db.update(
       'budgets',
@@ -492,36 +520,52 @@ class DatabaseService {
 
   /// Suppression définitive d'un budget (RGPD).
   Future<void> purgeBudget(String id) async {
-    final db = await database;
 
     await db.delete('budgets', where: 'id = ?', whereArgs: [id]);
   }
 
   /// Liste des budgets non supprimés.
-  Future<List<BudgetEntry>> getBudgets({bool includeDeleted = false}) async {
-    final db = await database;
+  Future<List<BudgetEntry>> getBudgets({bool includeDeleted = false, String userId = 'primary'}) async {
 
     final rows = await db.query(
       'budgets',
-      where: includeDeleted ? null : 'is_deleted = 0',
-      orderBy: 'category IS NULL, category',
-    );
+      where: includeDeleted ? 'userId = ?' : 'userId = ? AND is_deleted = 0',
+      whereArgs: [userId],
+      // orderBy retiré : la colonne category est chiffrée par AES-GCM.
+      // SQLite ne peut pas trier alphabétiquement sur des valeurs chiffrées.
+      // Le tri sera appliqué après déchiffrement ci-dessous.
+    )
 
     final budgets = <BudgetEntry>[];
     for (final row in rows) {
       budgets.add(await _budgetFromRow(row));
     }
+
+    // ✅ Tri après déchiffrement : les catégories non chiffrées ne peuvent
+    // pas être triées par SQLite. On trie ici par catégorie déchiffrée.
+    // Note : le tri par catégorie chiffrée n'est pas garanti d'être
+    // identique au tri SQL sur texte clair, mais assure une ordre
+    // déterministe après déchiffrement.
+    budgets.sort((a, b) {
+      final catA = a.category;
+      final catB = b.category;
+      // Les budgets sans catégorie (global) viennent en premier
+      if (catA == null && catB == null) return 0;
+      if (catA == null) return -1;
+      if (catB == null) return 1;
+      return catA.compareTo(catB);
+    });
+
     return budgets;
   }
 
   /// Budget global (clé `id = 'global'`).
   Future<double> getGlobalBudget() async {
-    final db = await database;
 
     final rows = await db.query(
       'budgets',
-      where: 'id = ? AND is_deleted = 0',
-      whereArgs: ['global'],
+      where: 'id = ? AND is_deleted = 0 AND userId = ?',
+      whereArgs: ['primary', 'primary'],
       limit: 1,
     );
 
@@ -543,12 +587,11 @@ class DatabaseService {
 
   /// Budget d'une catégorie.
   Future<double> getCategoryBudget(String category) async {
-    final db = await database;
 
     final rows = await db.query(
       'budgets',
-      where: 'category = ? AND is_deleted = 0',
-      whereArgs: [category],
+      where: 'category = ? AND is_deleted = 0 AND userId = ?',
+      whereArgs: [category, 'primary'],
       limit: 1,
     );
 
@@ -576,7 +619,6 @@ class DatabaseService {
   // ── Objectifs ────────────────────────────────────────────────────────
 
   Future<void> insertGoal(GoalEntry goal) async {
-    final db = await database;
 
     await db.insert(
       'goals',
@@ -586,7 +628,6 @@ class DatabaseService {
   }
 
   Future<void> updateGoal(GoalEntry goal) async {
-    final db = await database;
 
     await db.update(
       'goals',
@@ -598,7 +639,6 @@ class DatabaseService {
 
   /// Suppression logique d'un objectif.
   Future<void> deleteGoal(String id) async {
-    final db = await database;
 
     await db.update(
       'goals',
@@ -610,20 +650,19 @@ class DatabaseService {
 
   /// Suppression définitive d'un objectif (RGPD).
   Future<void> purgeGoal(String id) async {
-    final db = await database;
 
     await db.delete('goals', where: 'id = ?', whereArgs: [id]);
   }
 
   /// Liste des objectifs non supprimés.
-  Future<List<GoalEntry>> getGoals({bool includeDeleted = false}) async {
-    final db = await database;
+  Future<List<GoalEntry>> getGoals({bool includeDeleted = false, String userId = 'primary'}) async {
 
     final rows = await db.query(
       'goals',
-      where: includeDeleted ? null : 'is_deleted = 0',
+      where: includeDeleted ? 'userId = ?' : 'userId = ? AND is_deleted = 0',
+      whereArgs: [userId],
       orderBy: 'updated_at DESC',
-    );
+    )
 
     final goals = <GoalEntry>[];
     for (final row in rows) {
@@ -631,4 +670,137 @@ class DatabaseService {
     }
     return goals;
   }
+
+  /// Exporte toutes les transactions vers une chaîne CSV.
+  ///
+  /// Colonnes : id, amount, category, description, date, type, isDeleted, notes
+  /// Format date : yyyy-MM-dd (ISO 8601 date only)
+  /// Les montants sont exportés avec 2 décimales (format européen : virgule)
+  Future<String> exportTransactionsToCsv({bool includeDeleted = false}) async {
+    final transactions = await getTransactions(includeDeleted: includeDeleted);
+
+    // En-têtes CSV
+    final rows = <List<String>>[];
+    rows.add(['id', 'amount', 'category', 'description', 'date', 'type', 'isDeleted', 'notes']);
+
+    for (final tx in transactions) {
+      rows.add([
+        tx.id,
+        tx.amount.toStringAsFixed(2).replaceAll('.', ','),
+        tx.category,
+        tx.description,
+        '${tx.date.year}-${tx.date.month.toString().padLeft(2, '0')}-${tx.date.day.toString().padLeft(2, '0')}',
+        tx.type.name,
+        tx.isDeleted ? '1' : '0',
+        tx.notes,
+      ]);
+    }
+
+    return const CsvConverter().convert(rows);
+  }
+
+  /// Importe des transactions depuis une chaîne CSV.
+  ///
+  /// Format attendu : id, amount, category, description, date, type, isDeleted, notes
+  /// Gestion des doublons : INSERT OR REPLACE (UPDATE si ID existe, INSERT sinon)
+  /// Retourne le nombre de lignes importées/mises à jour.
+  Future<int> importTransactionsFromCsv(String csvData) async {
+    final result = const CsvConverter().convert(csvData);
+    if (result.isEmpty || result.length < 2) return 0;
+
+    final headers = result.first.map((e) => e.toString().toLowerCase().trim()).toList();
+    int imported = 0;
+
+    final db = await database;
+
+    for (int i = 1; i < result.length; i++) {
+      final row = result[i];
+      if (row.length < 7) continue; // Ligne invalide
+
+      try {
+        final id = row[0]?.toString() ?? '';
+        final amountStr = row[1]?.toString().replaceAll(',', '.') ?? '0';
+        final amount = double.tryParse(amountStr) ?? 0;
+        final category = row[2]?.toString() ?? '';
+        final description = row[3]?.toString() ?? '';
+        final dateStr = row[4]?.toString() ?? '';
+        final typeStr = row[5]?.toString().toLowerCase() ?? 'expense';
+        final isDeletedStr = row[6]?.toString() ?? '0';
+        final notes = row.length > 7 ? row[7]?.toString() ?? '' : '';
+
+        // Validation date
+        final dateParts = dateStr.split('-');
+        if (dateParts.length != 3) continue;
+        final date = DateTime(
+          int.parse(dateParts[0]),
+          int.parse(dateParts[1]),
+          int.parse(dateParts[2]),
+        );
+
+        // Validation type
+        TransactionType type;
+        switch (typeStr) {
+          case 'income':
+            type = model.TransactionType.income;
+            break;
+          case 'expense':
+            type = model.TransactionType.expense;
+            break;
+          case 'transfer':
+            type = model.TransactionType.transfer;
+            break;
+          default:
+            continue; // Type invaligne -> ignorer
+        }
+
+        final isDeleted = isDeletedStr == '1';
+
+        // INSERT OR REPLACE
+        await db.insert(
+          'transactions',
+          {
+            'id': id,
+            'amount': amount,
+            'category': category,
+            'description': description,
+            'date': date.toIso8601String(),
+            'type': type.name,
+            'notes': notes,
+            'is_deleted': isDeleted ? 1 : 0,
+            'userId': 'primary',
+          },
+          conflictAlgorithm: ConflictAlgorithm.replace,
+        );
+
+        imported++;
+      } catch (e) {
+        // Ligne invalide -> ignorer, continuer
+        continue;
+      }
+    }
+
+    return imported;
+  }
+
+  /// Vérifie si des données en clair ont été détectées et définit un message
+  /// de migration à afficher à l'utilisateur.
+  static void _checkAndSetMigrationMessage(int oldVersion, int newVersion) {
+    // Si on passe de v1/v2 (données en clair) vers v3+ (chiffré), on note
+    // qu'une migration a eu lieu. L'utilisateur sera informé au prochain démarrage.
+    if (oldVersion < 3 && newVersion >= 3) {
+      _migrationMessage = 'Vos données ont été migrées vers le chiffrement renforcé au démarrage précédent.';
+    } else if (oldVersion < 5 && newVersion >= 5) {
+      _migrationMessage = 'Vos budgets et objectifs ont été chiffrés pour une sécurité renforcée.';
+    } else {
+      _migrationMessage = null;
+    }
+  }
+
+  /// Message de migration affiché au premier démarrage après avoir migré
+  /// des données en clair vers le chiffrement.
+  /// À appeler après l'initialisation de la base de données.
+  static String? get migrationMessage => _migrationMessage;
+
+  /// Version de schéma stockée dans la base de données après les migrations.
+  static int get storedSchemaVersion => _storedSchemaVersion;
 }

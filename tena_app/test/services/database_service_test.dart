@@ -218,19 +218,19 @@ void main() {
     });
 
     test('ajout, mise à jour et suppression', () async {
-      await GoalService.addGoal(name: 'PC', target: 2000, saved: 500);
+      await GoalService.addGoal(name: 'PC', targetEuros: 2000, savedEuros: 500);
 
       var goals = await GoalService.getGoals();
       expect(goals.length, 1);
       expect(goals.first.name, 'PC');
-      expect(goals.first.target, 2000);
-      expect(goals.first.saved, 500);
+      expect(goals.first.targetEuros, 2000);
+      expect(goals.first.savedEuros, 500);
       expect(goals.first.id, isNotEmpty);
 
-      await GoalService.updateGoal(goals.first.copyWith(saved: 1200));
+      await GoalService.updateGoal(goals.first.copyWith(savedCents: 120000));
 
       goals = await GoalService.getGoals();
-      expect(goals.first.saved, 1200);
+      expect(goals.first.savedEuros, 1200);
 
       await GoalService.deleteGoal(goals.first.id);
 
@@ -238,15 +238,15 @@ void main() {
     });
 
     test('les objectifs sont réellement persistés (survivent au redémarrage)', () async {
-      await GoalService.addGoal(name: 'Vacances', target: 3000, saved: 250);
+      await GoalService.addGoal(name: 'Vacances', targetEuros: 3000, savedEuros: 250);
 
       DatabaseService.resetForTesting();
 
       final goals = await GoalService.getGoals();
       expect(goals.length, 1);
       expect(goals.first.name, 'Vacances');
-      expect(goals.first.target, 3000);
-      expect(goals.first.saved, 250);
+      expect(goals.first.targetEuros, 3000);
+      expect(goals.first.savedEuros, 250);
     });
 
     test('une erreur de lecture retourne une liste vide, pas de fausse donnée', () async {

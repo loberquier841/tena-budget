@@ -47,9 +47,10 @@ class ForecastService {
     for (final transaction in transactions) {
       if (transaction.type == TransactionType.expense) {
         totalExpenses += transaction.amount;
-      } else {
+      } else if (transaction.type == TransactionType.income) {
         totalIncome += transaction.amount;
       }
+      // TransactionType.transfer is excluded from both income and expenses
     }
 
     final averageExpenses = totalExpenses / monthCount;
