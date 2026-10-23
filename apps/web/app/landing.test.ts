@@ -21,10 +21,10 @@ describe('TENΛ Budget landing page', () => {
 
   it('provides a CSS module selector for every class used by the page', () => {
     const usedClasses = new Set(
-      [...page.matchAll(/styles\\.([A-Za-z_][A-Za-z0-9_]*)/g)].map((match) => match[1]),
+      [...page.matchAll(/styles\.([A-Za-z_][A-Za-z0-9_]*)/g)].map((match) => match[1]),
     );
     const definedClasses = new Set(
-      [...styles.matchAll(/\\.([A-Za-z_][A-Za-z0-9_-]*)/g)].map((match) => match[1]),
+      [...styles.matchAll(/\.([A-Za-z_][A-Za-z0-9_-]*)/g)].map((match) => match[1]),
     );
 
     expect(usedClasses.size).toBeGreaterThan(0);
