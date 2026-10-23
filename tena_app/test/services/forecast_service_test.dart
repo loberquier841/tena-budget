@@ -46,6 +46,27 @@ void main() {
       expect(result.estimatedBalance, 800);
     });
 
+    test('ignore les transferts et les transactions supprimées', () {
+      final result = ForecastService.calculate([
+        _transaction(amount: 100, date: DateTime(2026, 1, 10)),
+        _transaction(amount: 1000, date: DateTime(2026, 1, 11),
+            type: TransactionType.transfer),
+        Transaction(
+          id: 'deleted',
+          amount: 900,
+          category: 'Test',
+          description: '',
+          date: DateTime(2026, 1, 12),
+          type: TransactionType.expense,
+          isDeleted: true,
+        ),
+      ]);
+
+      expect(result.averageMonthlyExpenses, 100);
+      expect(result.averageMonthlyIncome, 0);
+      expect(result.estimatedBalance, -100);
+    });
+
     test('additionne les montants du même jour', () {
       final result = ForecastService.calculate([
         _transaction(amount: 10, date: DateTime(2026, 1, 10)),

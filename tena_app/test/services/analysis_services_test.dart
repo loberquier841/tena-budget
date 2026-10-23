@@ -51,6 +51,23 @@ void main() {
       expect(report.topCategories, isEmpty);
     });
 
+    test('ignore les transferts dans les revenus, dépenses et catégories', () {
+      final report = _report(
+        transactions: [
+          _transaction(id: 'income', amount: 2000, date: DateTime(2026, 3, 1),
+              type: TransactionType.income),
+          _transaction(id: 'expense', amount: 300, date: DateTime(2026, 3, 2)),
+          _transaction(id: 'transfer', amount: 700, date: DateTime(2026, 3, 3),
+              type: TransactionType.transfer),
+        ],
+      );
+
+      expect(report.income, 2000);
+      expect(report.expenses, 300);
+      expect(report.balance, 1700);
+      expect(report.topCategories.length, 1);
+    });
+
     test('ignore les transactions des autres mois', () {
       final report = _report(
         transactions: [

@@ -258,9 +258,13 @@ class DatabaseService {
         (row['description'] as String?) ?? '',
       ),
       date: DateTime.parse(row['date'] as String),
-      type: row['type'] == 'income'
-          ? model.TransactionType.income
-          : model.TransactionType.expense,
+      type: switch (row['type']) {
+        'income' => model.TransactionType.income,
+        'expense' => model.TransactionType.expense,
+        'transfer' => model.TransactionType.transfer,
+        final unknown => throw FormatException(
+            'Type de transaction inconnu "$unknown" pour ${row['id']}'),
+      },
       isDeleted: ((row['is_deleted'] as int?) ?? 0) == 1,
     );
   }

@@ -18,7 +18,12 @@ class ForecastResult {
 
 class ForecastService {
   static ForecastResult calculate(List<Transaction> transactions) {
-    if (transactions.isEmpty) {
+    final relevantTransactions = transactions.where((transaction) {
+      return !transaction.isDeleted &&
+          transaction.type != TransactionType.transfer;
+    }).toList();
+
+    if (relevantTransactions.isEmpty) {
       return const ForecastResult(
         averageMonthlyExpenses: 0,
         averageMonthlyIncome: 0,
@@ -30,7 +35,7 @@ class ForecastService {
 
     final months = <String>{};
 
-    for (final transaction in transactions) {
+    for (final transaction in relevantTransactions) {
       // Clé zero-padrée : sans elle, janvier (`1`) et novembre (`11`)
       // produiraient la même chaîne et seraient comptés pour un seul mois,
       // ce qui gonflerait artificiellement la moyenne mensuelle.
@@ -47,7 +52,7 @@ class ForecastService {
     for (final transaction in transactions) {
       if (transaction.type == TransactionType.expense) {
         totalExpenses += transaction.amount;
-      } else {
+      } else if (transaction.type == TransactionType.income) {
         totalIncome += transaction.amount;
       }
     }

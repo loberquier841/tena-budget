@@ -6,6 +6,7 @@ import 'package:tena_budget/services/budget_service.dart';
 import 'package:tena_budget/services/crypto_service.dart';
 import 'package:tena_budget/services/database_service.dart';
 import 'package:tena_budget/services/goal_service.dart';
+import 'package:tena_budget/models/transaction.dart' as transaction_model;
 
 class _MemoryKeyStore implements SecretKeyStore {
   String? value;
@@ -39,6 +40,28 @@ void main() {
     keyStore = _MemoryKeyStore();
     CryptoService.useKeyStore(keyStore);
     DatabaseService.resetForTesting();
+  });
+
+  group('DatabaseService — types de transaction', () {
+    test('un transfert conserve son type après un aller-retour SQLite', () async {
+      final id = 'transfer-${DateTime.now().microsecondsSinceEpoch}';
+      final original = transaction_model.Transaction(
+        id: id,
+        amount: 125.50,
+        category: 'Transfert',
+        description: 'Virement entre comptes',
+        date: DateTime(2026, 10, 23),
+        type: transaction_model.TransactionType.transfer,
+      );
+
+      await DatabaseService.instance.insertTransaction(original);
+
+      final transactions = await DatabaseService.instance.getTransactions();
+      final restored = transactions.singleWhere((transaction) => transaction.id == id);
+
+      expect(restored.type, transaction_model.TransactionType.transfer);
+      expect(restored.amount, 125.50);
+    });
   });
 
   group('DatabaseService — budgets', () {

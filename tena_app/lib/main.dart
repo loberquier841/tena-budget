@@ -367,9 +367,11 @@ class _DashboardPageState extends State<DashboardPage> {
 
       final current = totals[day] ?? _DailyTotals();
 
+      if (transaction.isDeleted) continue;
+
       if (transaction.type == TransactionType.income) {
         current.income += transaction.amount;
-      } else {
+      } else if (transaction.type == TransactionType.expense) {
         current.expenses += transaction.amount;
       }
 
