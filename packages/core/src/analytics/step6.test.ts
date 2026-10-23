@@ -102,6 +102,15 @@ describe("Cohérence budget/dépenses/restant", () => {
     expect(vs[0].remainingCents).toBe(70000);
     expect(Number.isInteger(vs[0].remainingCents)).toBe(true);
   });
+
+  it("compte un débit bancaire négatif comme dépense positive et isole la période du budget", () => {
+    const budget = createBudget({ familyId: "fam1", type: "monthly", year: 2026, month: 5, amountCents: 100000, categoryId: "cat1" }, "owner", []);
+    const mayDebit = createTransaction({ familyId: "fam1", amountCents: -2450, bookingDate: new Date("2026-05-12T12:00:00Z"), label: "Courses importées", source: "import", personId: "p1", categoryId: "cat1", createdByUserId: "u1" }, "owner");
+    const juneDebit = createTransaction({ familyId: "fam1", amountCents: -8000, bookingDate: new Date("2026-06-12T12:00:00Z"), label: "Autre mois", source: "import", personId: "p1", categoryId: "cat1", createdByUserId: "u1" }, "owner");
+    const vs = getBudgetVsSpent([budget], [mayDebit, juneDebit] as any, { familyId: "fam1" });
+    expect(vs[0].spentCents).toBe(2450);
+    expect(vs[0].remainingCents).toBe(97550);
+  });
 });
 
 describe("Permissions", () => {

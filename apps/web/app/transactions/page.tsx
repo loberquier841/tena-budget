@@ -1,214 +1,232 @@
 'use client';
 
-import { useState } from 'react';
-import { auth } from '@/auth';
-import { getLocalTransactions, LocalTransaction } from '@/sync/dexie';
+import { useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
+import { getLocalTransactions, type LocalTransaction } from '@tena/core/sync/dexie';
+import { getLocalFamilyIds } from '../../lib/localFamilyIds';
 
-export default function TransactionsFinalPage() {
-  const [filters, setFilters] = useState({ personId: '', categoryId: '', source: '', minCents: '', maxCents: '', label: '', from: '', to: '' });
-  const [sort, setSort] = useState({ field: 'bookingDate', direction: 'desc' });
+type TransactionFilters = {
+  categoryId: string;
+  source: string;
+  minCents: string;
+  maxCents: string;
+  label: string;
+  from: string;
+  to: string;
+};
+
+type SortField = 'bookingDate' | 'amountCents' | 'label';
+
+const EMPTY_FILTERS: TransactionFilters = {
+  categoryId: '',
+  source: '',
+  minCents: '',
+  maxCents: '',
+  label: '',
+  from: '',
+  to: '',
+};
+
+function localDateValue(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function formatCents(amountCents: number): string {
+  return new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(amountCents / 100);
+}
+
+export default function TransactionsPage() {
+  const [familyIds, setFamilyIds] = useState<string[]>([]);
+  const [familyId, setFamilyId] = useState('');
+  const [transactions, setTransactions] = useState<LocalTransaction[]>([]);
+  const [filters, setFilters] = useState<TransactionFilters>(EMPTY_FILTERS);
+  const [sortField, setSortField] = useState<SortField>('bookingDate');
+  const [sortAscending, setSortAscending] = useState(false);
   const [page, setPage] = useState(1);
+  const [loadingFamilies, setLoadingFamilies] = useState(true);
+  const [loadingTransactions, setLoadingTransactions] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const pageSize = 10;
 
-  // Chargement réel depuis IndexedDB Dexie
-  // Note: getLocalTransactions filtre déjà isDeleted=true par défaut
-  // familyId: priorité à la session auth, fallback localStorage, ensuite 'family_default'
-  const [transactions, setTransactions] = useState<LocalTransaction[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [familyId, setFamilyId] = useState<string | null>(null);
-
   useEffect(() => {
-    (async () => {
+    let active = true;
+
+    async function loadLocalSpaces() {
       try {
-        setLoading(true);
-        const session = await auth();
-        if (session && session.userId) {
-          setFamilyId(session.userId);
-          setIsAuthenticated(true);
-        } else {
-          setFamilyId(null);
-          setIsAuthenticated(false);
-          setError('Connexion requise pour accéder aux transactions');
-          setLoading(false);
-          return;
-        }
-        const data = await getLocalTransactions(familyId!);
-        setTransactions(data);
-        setLoading(false);
-      } catch (e) {
-        setError((e as Error).message);
-        setLoading(false);
+        const choices = await getLocalFamilyIds();
+        if (!active) return;
+        setFamilyIds(choices);
+        if (choices.length === 1) setFamilyId(choices[0]);
+      } catch (cause) {
+        if (active) setError(cause instanceof Error ? cause.message : 'Impossible de lire les espaces locaux.');
+      } finally {
+        if (active) setLoadingFamilies(false);
       }
-    })();
+    }
+
+    void loadLocalSpaces();
+    return () => { active = false; };
   }, []);
 
-  // Note: isAuthenticated et familyId sont dÃ©jà rÃglÃĐs ci-dessus selon la prÃsence de session.userId.
-  // Les permissions sont vÃrifiÃ©es au cas par cas via assertCan() dans le rendu ci-dessous.
+  useEffect(() => {
+    let active = true;
+    if (!familyId) {
+      setTransactions([]);
+      return () => { active = false; };
+    }
 
+    async function loadTransactions() {
+      setLoadingTransactions(true);
+      setError(null);
+      try {
+        const rows = await getLocalTransactions(familyId);
+        if (active) setTransactions(rows);
+      } catch (cause) {
+        if (active) setError(cause instanceof Error ? cause.message : 'Impossible de lire les transactions locales.');
+      } finally {
+        if (active) setLoadingTransactions(false);
+      }
+    }
 
+    void loadTransactions();
+    return () => { active = false; };
+  }, [familyId]);
 
-  // --- Comptes et pagination (calculés depuis les transactions chargées) ---
-  const filteredTransactions = transactions.filter(t => {
-    if (filters.personId && t.personId !== filters.personId) return false;
-    if (filters.categoryId && t.categoryId !== filters.categoryId) return false;
-    if (filters.source && t.source !== filters.source) return false;
-    if (filters.minCents && t.amountCents < parseInt(filters.minCents)) return false;
-    if (filters.maxCents && t.amountCents > parseInt(filters.maxCents)) return false;
-    if (filters.label && !t.label.toLowerCase().includes(filters.label.toLowerCase())) return false;
-    if (filters.from && t.bookingDate < filters.from) return false;
-    if (filters.to && t.bookingDate > filters.to) return false;
+  const filtered = useMemo(() => transactions.filter((transaction) => {
+    if (filters.categoryId && transaction.categoryId !== filters.categoryId) return false;
+    if (filters.source && (transaction.source ?? 'manual') !== filters.source) return false;
+    if (filters.minCents && transaction.amountCents < Number(filters.minCents)) return false;
+    if (filters.maxCents && transaction.amountCents > Number(filters.maxCents)) return false;
+    if (filters.label && !transaction.label.toLocaleLowerCase('fr-FR').includes(filters.label.toLocaleLowerCase('fr-FR'))) return false;
+    const date = localDateValue(transaction.bookingDate);
+    if (filters.from && date < filters.from) return false;
+    if (filters.to && date > filters.to) return false;
     return true;
-  });
+  }), [transactions, filters]);
 
-  const sortedTransactions = [...filteredTransactions].sort((a, b) => {
-    let cmp = 0;
-    if (sort.field === 'bookingDate') cmp = a.bookingDate.localeCompare(b.bookingDate);
-    else if (sort.field === 'amountCents') cmp = a.amountCents - b.amountCents;
-    else cmp = a.label.localeCompare(b.label);
-    return sort.direction === 'asc' ? cmp : -cmp;
-  });
+  const sorted = useMemo(() => [...filtered].sort((a, b) => {
+    let result = 0;
+    if (sortField === 'bookingDate') result = a.bookingDate.getTime() - b.bookingDate.getTime();
+    else if (sortField === 'amountCents') result = a.amountCents - b.amountCents;
+    else result = a.label.localeCompare(b.label, 'fr');
+    return sortAscending ? result : -result;
+  }), [filtered, sortAscending, sortField]);
 
-  const total = sortedTransactions.length;
-  const totalPages = Math.ceil(total / pageSize);
-  const paginated = sortedTransactions.slice((page - 1) * pageSize, page * pageSize);
+  const pageCount = Math.max(1, Math.ceil(sorted.length / pageSize));
+  const currentPage = Math.min(page, pageCount);
+  const pageRows = sorted.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+  const categories = [...new Set(transactions.map((transaction) => transaction.categoryId).filter((id): id is string => Boolean(id)))].sort();
 
-<div style={{ marginBottom: 16, padding: 12, background: '#f9fafb', borderRadius: 8, border: '1px solid #e5e7eb' }}>
-<div style={{ background: 'white', borderRadius: 12, border: '1px solid #e5e7eb', marginTop: 16, overflowX: 'auto' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-          <thead style={{ background: '#f9fafb' }}><tr style={{ fontSize: 11, color: '#666', textAlign: 'left' }}>
-            <th style={{ padding: 12 }}>Date</th>
-            <th>Libellé</th>
-            <th>Catégorie</th>
-            <th>Personne (obligatoire)</th>
-            <th>Montant Int</th>
-            <th>Source</th>
-            <th>Actions (permissions)</th>
-          </thead>
-          <tbody>
-            {paginated.map(t => (
-              <tr key={t.id} style={{ borderTop: '1px solid #f3f4f6', opacity: 1 }}>
-                <td style={{ padding: 12, fontSize: 12 }}>{t.date}</td>
-                <td style={{ padding: 12, fontSize: 12 }}>{t.label}</td>
-                <td style={{ padding: 12, fontSize: 12 }}>{t.category}</td>
-                <td style={{ padding: 12, fontSize: 12 }}>{t.person} ({t.personId})</td>
-                <td style={{ padding: 12, fontSize: 12 }}><strong>{(t.amountCents/100).toFixed(2)}€</strong><br/><span style={{ fontSize: 10, color: '#888' }}>{t.amountCents}c Int</span></td>
-                <td style={{ padding: 12, fontSize: 11 }}><span style={{ background: '#f3f4f6', padding: '2px 6px', borderRadius: 6 }}>{t.source}</span></td>
-                <td style={{ padding: 12 }}>
-                  {isAuthenticated ? (
-                    <div style={{ display: 'flex', gap: 4 }}>
-                      {canEdit && (
-                        <button style={{ fontSize: 11, padding: '4px 8px', borderRadius: 6, border: '1px solid #e5e7eb' }}>Modifier</button>
-                      )}
-                      {canDelete && (
-                        <button style={{ fontSize: 11, padding: '4px 8px', borderRadius: 6, border: '1px solid #e5e7eb' }}>Supprimer soft</button>
-                      )}
-                    </div>
-                  ) : (
-                    <span style={{ color: '#666' }}>Connexion requise</span>
-                  )}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        <div style={{ padding: 12, display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#666' }}>
-          <span>Total filtré: {total} • Page {page}/{totalPages} • {pageSize} par page • Tri {sort.field} {sort.direction} • Totaux Int vérifiés</span>
-          <div style={{ display: 'flex', gap: 4 }}>
-            <button disabled={page===1} onClick={() => setPage(page-1)} style={{ padding: '4px 8px', borderRadius: 6, border: '1px solid #e5e7eb' }}>←</button>
-            <span style={{ padding: '4px 8px' }}>{page}/{totalPages}</span>
-            <button disabled={page===totalPages} onClick={() => setPage(page+1)} style={{ padding: '4px 8px', borderRadius: 6, border: '1px solid #e5e7eb' }}>→</button>
-          </div>
+  function updateFilter<K extends keyof TransactionFilters>(key: K, value: TransactionFilters[K]) {
+    setFilters((current) => ({ ...current, [key]: value }));
+    setPage(1);
+  }
+
+  return (
+    <main style={{ maxWidth: 1120, margin: '0 auto', padding: '32px 20px', color: '#f5f5f7' }}>
+      <header style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+        <div>
+          <h1 style={{ margin: 0, fontSize: 28 }}>Transactions</h1>
+          <p style={{ color: '#a0a0ab', marginBottom: 0 }}>Données lues depuis le stockage local de cet appareil.</p>
         </div>
-      </div>
-        <div style={{ display: 'flex', gap: 16, marginBottom: 8 }}>
-          <select
-            style={{ flex: 1, padding: 8, borderRadius: 6, border: '1px solid #e5e7eb' }}
-            onChange={e => setFilters({ ...filters, personId: e.target.value })}}
-          >
-            <option value="">Toutes personnes</option>
-            {transactions.map(t => <option key={t.personId} value={t.personId}>{t.person} ({t.personId})</option>)}
+        <Link href="/dashboard" style={{ color: '#e8cc6a' }}>Retour au tableau de bord</Link>
+      </header>
+
+      {loadingFamilies ? <p role="status">Recherche des données locales…</p> : null}
+
+      {!loadingFamilies && familyIds.length > 1 ? (
+        <label style={{ display: 'grid', gap: 6, maxWidth: 440, margin: '24px 0' }}>
+          <span>Choisir un espace local</span>
+          <select value={familyId} onChange={(event) => { setFamilyId(event.target.value); setPage(1); }} style={{ padding: 10 }}>
+            <option value="">Sélectionner…</option>
+            {familyIds.map((id) => <option key={id} value={id}>{id}</option>)}
           </select>
-          <select
-            style={{ flex: 1, padding: 8, borderRadius: 6, border: '1px solid #e5e7eb' }}
-            onChange={e => setFilters({ ...filters, categoryId: e.target.value })}}
-          >
-            <option value="">Toutes catégories</option>
-            <option value="manual">Manuel</option>
-            <option value="import">Import</option>
-            <option value="bank">Banque</option>
-          </select>
-        </div>
+        </label>
+      ) : null}
 
-        <div style={{ display: 'flex', gap: 16, marginBottom: 8, fontSize: 12 }}>
-          <label>
-            <span>Source :</span>
-            <select
-              style={{ padding: 4, borderRadius: 4, border: '1px solid #e5e7eb' }}
-              onChange={e => setFilters({ ...filters, source: e.target.value })}}
-            >
-              <option value="">Toutes</option>
-              <option value="manual">Manuel</option>
-              <option value="import">Import</option>
-              <option value="bank">Banque</option>
-            </select>
-          </label>
-          <label>
-            <span>Label :</span>
-            <select
-              style={{ padding: 4, borderRadius: 4, border: '1px solid #e5e7eb' }}
-              onChange={e => setFilters({ ...filters, label: e.target.value })}}
-            >
-              <option value="">Tout</option>
-              {[...new Set(transactions.map(t => t.label))].map(l => <option key={l} value={l}>{l}</option>)}
-            </select>
-          </label>
-        </div>
+      {error ? <p role="alert" style={{ color: '#fca5a5' }}>{error}</p> : null}
 
-        <div style={{ display: 'flex', gap: 16 }}>
-          <div style={{ flex: 1, padding: 8, borderRadius: 6, border: '1px solid #e5e7eb' }}>
-            <label>
-              <span>Min (cents)</span>
-              <input
-                type="number"
-                value={filters.minCents || ''}
-                onChange={e => setFilters({ ...filters, minCents: e.target.value })}}
-                />
+      {!loadingFamilies && familyIds.length === 0 && !error ? (
+        <section style={{ marginTop: 28, padding: 24, border: '1px solid #2a2a30', borderRadius: 14 }}>
+          <h2 style={{ marginTop: 0 }}>Aucune transaction locale</h2>
+          <p style={{ color: '#a0a0ab' }}>Les transactions apparaîtront ici lorsqu’elles seront enregistrées sur cet appareil.</p>
+          <Link href="/onboarding" style={{ color: '#e8cc6a' }}>Découvrir le questionnaire</Link>
+        </section>
+      ) : null}
+
+      {familyId ? (
+        <>
+          <section aria-label="Filtres des transactions" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 180px), 1fr))', gap: 12, margin: '24px 0' }}>
+            <label style={{ display: 'grid', gap: 5 }}>Recherche
+              <input value={filters.label} onChange={(event) => updateFilter('label', event.target.value)} placeholder="Libellé" />
             </label>
-          </div>
-          <div style={{ flex: 1, padding: 8, borderRadius: 6, border: '1px solid #e5e7eb' }}>
-            <label>
-              <span>Max (cents)</span>
-              <input
-                type="number"
-                value={filters.maxCents || ''}
-                onChange={e => setFilters({ ...filters, maxCents: e.target.value })}}
-                />
+            <label style={{ display: 'grid', gap: 5 }}>Catégorie
+              <select value={filters.categoryId} onChange={(event) => updateFilter('categoryId', event.target.value)}>
+                <option value="">Toutes</option>
+                {categories.map((id) => <option key={id} value={id}>{id}</option>)}
+              </select>
             </label>
-          </div>
-        </div>
+            <label style={{ display: 'grid', gap: 5 }}>Source
+              <select value={filters.source} onChange={(event) => updateFilter('source', event.target.value)}>
+                <option value="">Toutes</option><option value="manual">Manuelle</option><option value="import">Import</option><option value="bank">Banque</option>
+              </select>
+            </label>
+            <label style={{ display: 'grid', gap: 5 }}>Montant minimum (centimes)
+              <input type="number" min="0" step="1" value={filters.minCents} onChange={(event) => updateFilter('minCents', event.target.value)} />
+            </label>
+            <label style={{ display: 'grid', gap: 5 }}>Montant maximum (centimes)
+              <input type="number" min="0" step="1" value={filters.maxCents} onChange={(event) => updateFilter('maxCents', event.target.value)} />
+            </label>
+            <label style={{ display: 'grid', gap: 5 }}>Du
+              <input type="date" value={filters.from} onChange={(event) => updateFilter('from', event.target.value)} />
+            </label>
+            <label style={{ display: 'grid', gap: 5 }}>Au
+              <input type="date" value={filters.to} onChange={(event) => updateFilter('to', event.target.value)} />
+            </label>
+            <label style={{ display: 'grid', gap: 5 }}>Trier par
+              <select value={sortField} onChange={(event) => { setSortField(event.target.value as SortField); setPage(1); }}>
+                <option value="bookingDate">Date</option><option value="amountCents">Montant</option><option value="label">Libellé</option>
+              </select>
+            </label>
+            <button type="button" onClick={() => { setFilters(EMPTY_FILTERS); setPage(1); }}>Effacer les filtres</button>
+          </section>
 
-        <div style={{ marginTop: 8, display: 'flex', gap: 16 }}>
-          <label>
-            <span>Date debut</span>
-            <input
-              type="date"
-              value={filters.from || ''}
-              onChange={e => setFilters({ ...filters, from: e.target.value })}}
-              />
-          </label>
-          <label>
-            <span>Date fin</span>
-            <input
-              type="date"
-              value={filters.to || ''}
-              onChange={e => setFilters({ ...filters, to: e.target.value })}}
-              />
-          </label>
-        </div>
-      </div>
-</div>
+          {loadingTransactions ? <p role="status">Chargement des transactions…</p> : null}
+          {!loadingTransactions && !error && sorted.length === 0 ? <div><p>{transactions.length ? 'Aucune transaction ne correspond à ces filtres.' : 'Aucune transaction dans cet espace local.'}</p><Link href="/import" style={{ color: '#e8cc6a' }}>Importer un relevé CSV ou XLSX</Link></div> : null}
+
+          {pageRows.length > 0 ? (
+            <div style={{ overflowX: 'auto', border: '1px solid #2a2a30', borderRadius: 12 }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+                <thead><tr><th scope="col">Date</th><th scope="col">Libellé</th><th scope="col">Catégorie</th><th scope="col">Montant</th><th scope="col">Source</th></tr></thead>
+                <tbody>
+                  {pageRows.map((transaction) => (
+                    <tr key={transaction.id} style={{ borderTop: '1px solid #2a2a30' }}>
+                      <td style={{ padding: 10 }}>{localDateValue(transaction.bookingDate)}</td>
+                      <td style={{ padding: 10 }}>{transaction.label}</td>
+                      <td style={{ padding: 10 }}>{transaction.categoryId ?? '—'}</td>
+                      <td style={{ padding: 10 }}>{formatCents(transaction.amountCents)}</td>
+                      <td style={{ padding: 10 }}>{transaction.source ?? 'manual'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <nav aria-label="Pagination des transactions" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: 12 }}>
+                <span>{sorted.length} résultat{sorted.length > 1 ? 's' : ''} · page {currentPage} sur {pageCount}</span>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button type="button" disabled={currentPage <= 1} onClick={() => setPage((value) => Math.max(1, value - 1))}>Précédent</button>
+                  <button type="button" disabled={currentPage >= pageCount} onClick={() => setPage((value) => Math.min(pageCount, value + 1))}>Suivant</button>
+                  <button type="button" onClick={() => setSortAscending((value) => !value)} aria-label={`Changer le sens du tri, actuellement ${sortAscending ? 'croissant' : 'décroissant'}`}>
+                    Tri {sortAscending ? 'croissant' : 'décroissant'}
+                  </button>
+                </div>
+              </nav>
+            </div>
+          ) : null}
+        </>
+      ) : null}
     </main>
   );
 }

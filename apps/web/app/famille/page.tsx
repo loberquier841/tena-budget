@@ -1,17 +1,15 @@
+import Link from 'next/link';
 
-import { auth } from "@/auth";
-import { can } from "@tena/core/src/permissions/permissions";
-
-export default async function FamillePage() {
-  const session = await auth();
-  if (!session) return <p>Non connecté — <a href="/login">Login</a></p>;
-  const role = "owner" as const; // TODO: fetch from DB
+export default function FamillePage() {
   return (
-    <main>
-      <h1>Famille — Gestion membres</h1>
-      <p>Connecté: {(session as any).userId}</p>
-      <p>Peut inviter: {can(role, "budget:write") ? "oui" : "non"}</p>
-      <p>Limite appareils: 3 max par utilisateur — vérifiée côté serveur via canRegisterDevice()</p>
+    <main style={{ maxWidth: 760, margin: '0 auto', padding: '48px 20px', color: '#f5f5f7' }}>
+      <p style={{ color: '#e8cc6a', fontSize: 12, letterSpacing: '.12em' }}>TENΛ BUDGET</p>
+      <h1>Espace famille</h1>
+      <p style={{ color: '#a0a0ab', lineHeight: 1.7 }}>
+        Le partage familial, les invitations et la gestion des rôles ne sont pas encore disponibles dans cette version.
+        Les données personnelles restent gérées sur cet appareil.
+      </p>
+      <Link href="/dashboard" style={{ color: '#e8cc6a' }}>Retour au tableau de bord</Link>
     </main>
   );
 }

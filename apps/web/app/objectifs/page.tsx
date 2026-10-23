@@ -1,56 +1,78 @@
-import { auth } from "@/auth";
-import { getLocalSavingGoals, LocalSavingGoal, calculateProgress, SavingGoal } from "@/sync/dexie";
+'use client';
 
-export default async function ObjectifsPage() {
-  const session = await auth();
-  if (!session) return <main style={{ marginLeft: 260, padding: 24 }}><p>Non connecté</p></main>;
+import { useEffect, useState } from 'react';
+import Link from 'next/link';
+import { calculateProgress } from '@tena/core/budget/savings';
+import { getLocalSavingGoals, type LocalSavingGoal } from '@tena/core/sync/dexie';
+import { getLocalFamilyIds } from '@/lib/localFamilyIds';
 
-  const familyId = session.userId;
+function formatCents(amountCents: number): string {
+  return new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(amountCents / 100);
+}
 
-  // Chargement réel depuis IndexedDB Dexie (synchronique en server component)
-  let goals: LocalSavingGoal[] = [];
-  try {
-    goals = await getLocalSavingGoals(familyId);
-  } catch (e) {
-    console.error("Erreur chargement objectifs:", e);
-  }
+export default function ObjectifsPage() {
+  const [familyIds, setFamilyIds] = useState<string[]>([]);
+  const [familyId, setFamilyId] = useState('');
+  const [goals, setGoals] = useState<LocalSavingGoal[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  // Calcul de la progression pour chaque objectif
-  const goalsWithProgress = goals.map(g => ({
-    ...g,
-    ...calculateProgress(g as SavingGoal),
-  }));
+  useEffect(() => {
+    let active = true;
+    getLocalFamilyIds().then((ids) => {
+      if (!active) return;
+      setFamilyIds(ids);
+      if (ids.length === 1) setFamilyId(ids[0]);
+      setLoading(false);
+    }).catch((cause: unknown) => {
+      if (active) { setError(cause instanceof Error ? cause.message : 'Impossible de lire les espaces locaux.'); setLoading(false); }
+    });
+    return () => { active = false; };
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    if (!familyId) { setGoals([]); return () => { active = false; }; }
+    setLoading(true);
+    getLocalSavingGoals(familyId).then((rows) => {
+      if (active) setGoals(rows);
+    }).catch((cause: unknown) => {
+      if (active) setError(cause instanceof Error ? cause.message : 'Impossible de lire les objectifs locaux.');
+    }).finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, [familyId]);
 
   return (
-    <main style={{ marginLeft: 260, padding: 24, background: '#fafafa', minHeight: '100vh' }}>
-      <h1>🎯 Objectifs d'épargne — targetCents Int, progression sans float</h1>
-      <p style={{ color: '#666' }}>currentCents Int, remaining = target - current Int, percent = floor(current*100/target) Int, isExceeded, indépendant simulations</p>
-
-      <button style={{ marginTop: 16, background: '#7C3AED', color: 'white', padding: '10px 16px', borderRadius: 8, border: 'none' }}>+ Nouvel objectif</button>
-
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 16, marginTop: 16 }}>
-        {goalsWithProgress.map(g => (
-          <div key={g.id} style={{ background: 'white', padding: 20, borderRadius: 12, border: '1px solid #e5e7eb' }}>
-            <h3>{g.name} {g.personId ? `(${g.personId})` : '(Famille)'} {g.isExceeded ? '🎉 Dépassé!' : ''}</h3>
-            <div style={{ marginTop: 12 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#666' }}>
-                <span>{(g.currentCents/100).toFixed(2)}€ / {(g.targetCents/100).toFixed(2)}€</span>
-                <span>{g.percentInt}%</span>
+    <main style={{ maxWidth: 900, margin: '0 auto', padding: '32px 20px', color: '#f5f5f7' }}>
+      <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+        <div><h1 style={{ margin: 0 }}>Objectifs d’épargne</h1><p style={{ color: '#a0a0ab' }}>Progression calculée depuis les objectifs locaux.</p></div>
+        <Link href="/dashboard" style={{ color: '#e8cc6a' }}>Retour au tableau de bord</Link>
+      </header>
+      {familyIds.length > 1 ? (
+        <label style={{ display: 'grid', gap: 6, maxWidth: 420, margin: '20px 0' }}>Espace local
+          <select value={familyId} onChange={(event) => setFamilyId(event.target.value)}>
+            <option value="">Choisir un espace…</option>{familyIds.map((id) => <option key={id} value={id}>{id}</option>)}
+          </select>
+        </label>
+      ) : null}
+      {loading ? <p role="status">Chargement des objectifs…</p> : null}
+      {error ? <p role="alert" style={{ color: '#fca5a5' }}>{error}</p> : null}
+      {!loading && !error && familyIds.length === 0 ? <p>Aucun objectif enregistré sur cet appareil.</p> : null}
+      {!loading && familyId && goals.length === 0 ? <p>Aucun objectif dans cet espace local.</p> : null}
+      <section aria-label="Objectifs enregistrés" style={{ display: 'grid', gap: 12, marginTop: 20 }}>
+        {goals.map((goal) => {
+          const progress = calculateProgress(goal);
+          return (
+            <article key={goal.id} style={{ padding: 18, border: '1px solid #2a2a30', borderRadius: 12 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
+                <h2 style={{ margin: 0, fontSize: 17 }}>{goal.name}</h2><span>{progress.percentInt}%</span>
               </div>
-              <div style={{ width: '100%', height: 8, background: '#e5e7eb', borderRadius: 4, marginTop: 4 }}>
-                <div style={{ width: `${g.percentInt}%`, height: '100%', background: g.isExceeded ? '#22c55e' : '#7C3AED', borderRadius: 4 }}></div>
-              </div>
-              <p style={{ fontSize: 11, color: '#888', marginTop: 4 }}>currentCents c / targetCents c • Restant: g.remainingCents c Int = targetCents - currentCents • Percent Int = floor(currentCents*100/targetCents) = g.percentInt%</p>
-              {g.isExceeded && <p style={{ fontSize: 12, color: '#22c55e' }}>Objectif dépassé de {(Math.abs(g.remainingCents)/100).toFixed(2)}€ ! isExceeded=true</p>}
-            </div>
-            <div style={{ marginTop: 12, display: 'flex', gap: 8 }}>
-              <button style={{ flex: 1, padding: 8, borderRadius: 6, border: '1px solid #e5e7eb', fontSize: 12 }}>+ Ajouter contribution</button>
-              <button style={{ padding: 8, borderRadius: 6, border: '1px solid #fecaca', color: '#ef4444', fontSize: 12 }}>Archiver</button>
-            </div>
-            <p style={{ fontSize: 10, color: '#888', marginTop: 8 }}>Contributions Int, refuse 0, refuse passage négatif, soft delete, seuil 500€ owner, personId respecté</p>
-          </div>
-        ))}
-      </div>
+              <p style={{ color: '#a0a0ab' }}>{formatCents(progress.currentCents)} sur {formatCents(progress.targetCents)} · reste {formatCents(progress.remainingCents)}</p>
+              <progress max={100} value={Math.max(0, Math.min(100, progress.percentInt))} aria-label={`Progression de ${goal.name}`} />
+            </article>
+          );
+        })}
+      </section>
     </main>
   );
 }

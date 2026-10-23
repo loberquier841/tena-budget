@@ -14,9 +14,9 @@ import 'package:meta/meta.dart';
 /// Version actuelle du format de sauvegarde.
 ///
 /// Toute modification du format (ajout/suppression de champ, changement de
-/// encodage) doit incrémenter ce numéro. Les versions inconnues sont rejetées
-/// par [BackupService].
-const int backupFormatVersion = 1;
+/// encodage) doit incrémenter ce numéro. [BackupService] accepte les anciennes
+/// versions explicitement prises en charge et rejette les versions inconnues.
+const int backupFormatVersion = 2;
 
 /// Schéma de base de données cible de cette version du format.
 const int backupSchemaVersion = 5;
@@ -42,17 +42,23 @@ class BackupData {
   /// Objectifs d'épargne.
   final List<Map<String, dynamic>> goals;
 
+  /// Catégories personnalisées chiffrées dans les préférences locales.
+  /// Absentes des sauvegardes historiques (format 1).
+  final List<String> categories;
+
   const BackupData({
     this.profile,
     required this.transactions,
     required this.budgets,
     required this.goals,
+    this.categories = const [],
   });
 
   /// Nombre total de données personnelles incluses dans la sauvegarde.
   int get itemCount =>
       transactions.length +
       goals.length +
+      categories.length +
       (budgets['categories'] as Map? ?? <String, dynamic>{}).length +
       (budgets['global'] != null ? 1 : 0) +
       (profile != null ? 1 : 0);
@@ -62,6 +68,7 @@ class BackupData {
         'transactions': transactions,
         'budgets': budgets,
         'goals': goals,
+        'categories': categories,
       };
 
   factory BackupData.fromJson(Map<String, dynamic> json) {
@@ -73,6 +80,14 @@ class BackupData {
       budgets: Map<String, dynamic>.from(json['budgets'] as Map? ?? {}),
       goals: (json['goals'] as List? ?? <dynamic>[])
           .map((e) => Map<String, dynamic>.from(e as Map))
+          .toList(),
+      categories: (json['categories'] as List? ?? <dynamic>[])
+          .map<String>((e) {
+            if (e is! String || e.trim().isEmpty) {
+              throw const FormatException('Catégorie invalide');
+            }
+            return e.trim();
+          })
           .toList(),
     );
   }
@@ -104,6 +119,9 @@ class BackupSummary {
 
   /// Nombre d'objectifs à restaurer.
   int get goalCount => data.goals.length;
+
+  /// Nombre de catégories sauvegardées.
+  int get categoryCount => data.categories.length;
 
   /// Nombre de budgets à restaurer (global + par catégorie).
   int get budgetCount {

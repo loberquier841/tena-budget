@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 import {
   createBackup,
   encryptBackup,
@@ -10,6 +10,7 @@ import {
   type EncryptedBackup,
 } from "./backup";
 import type { Role } from "../permissions/permissions";
+import type { UserProfile } from "../product/profile";
 
 const role: Role = "owner";
 const familyId = "fam1";
@@ -52,23 +53,23 @@ describe("Sauvegardes et restaurations (backup.ts)", () => {
   });
 
   describe("createBackup", () => {
-    it("crée une sauvegarde version 2.0 avec checksum et filtre les supprimés", async () => {
+    it("crée une sauvegarde version 2.0 avec checksum et conserve les suppressions logiques", async () => {
       const backup = await createBackup(baseInput, role);
       expect(backup.version).toBe("2.0");
       expect(backup.familyId).toBe(familyId);
       expect(typeof backup.checksum).toBe("string");
       expect(backup.checksum.length).toBeGreaterThan(0);
-      expect(backup.transactions.find((t) => t.id === "tx-2")).toBeUndefined();
-      expect(backup.transactions.length).toBe(1);
-      expect(backup.goals.find((g) => g.id === "goal-2")).toBeUndefined();
-      expect(backup.goals.length).toBe(1);
+      expect(backup.transactions.find((t) => t.id === "tx-2")?.isDeleted).toBe(true);
+      expect(backup.transactions.length).toBe(2);
+      expect(backup.goals.find((g) => g.id === "goal-2")?.isDeleted).toBe(true);
+      expect(backup.goals.length).toBe(2);
     });
 
-    it("exclut les versements dont l'objectif est supprimé", async () => {
+    it("conserve les versements des objectifs supprimés pour préserver l'historique", async () => {
       const backup = await createBackup(baseInput, role);
       const contIds = backup.savingContributions?.map((c) => c.id) ?? [];
       expect(contIds).toContain("cont-1");
-      expect(contIds).not.toContain("cont-2");
+      expect(contIds).toContain("cont-2");
     });
 
     it("rejette un familyId manquant", async () => {
@@ -88,7 +89,7 @@ describe("Sauvegardes et restaurations (backup.ts)", () => {
     });
 
     it("inclut le profil utilisateur quand il est fourni", async () => {
-      const profile = {
+      const profile: UserProfile = {
         id: "primary" as const,
         schemaVersion: 1,
         createdAt: "2026-10-07T12:00:00.000Z",
@@ -168,7 +169,7 @@ describe("Sauvegardes et restaurations (backup.ts)", () => {
       const decrypted = await decryptBackup(encrypted, password);
       const result = await restoreBackup(decrypted, existingEmpty, role, { overwrite: false });
       expect(result.conflicts).toEqual([]);
-      expect(result.toCreate.transactions).toBe(baseInput.transactions.filter((t) => !t.isDeleted).length);
+        expect(result.toCreate.transactions).toBe(baseInput.transactions.length);
       expect(result.toCreate.budgets).toBe(1);
       expect(result.toCreate.categories).toBe(1);
     });

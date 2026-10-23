@@ -13,66 +13,55 @@ const BOM = '\uFEFF';
  * Préfère le séparateur qui donne un nombre de colonnes constant > 1 sur les premières lignes.
  */
 function detectCsvSeparator(text: string): ',' | ';' | '\t' {
-  const candidates: Array<',' | ';' | '\t'> = [',', ';', '\t'];
-  const lines = text.split(/\r?\n/).filter(l => l.length > 0).slice(0, 10);
-  if (lines.length === 0) return ',';
-
-  let best: ',' | ';' | '\t' = ',';
-  let bestScore = -1;
-  for (const sep of candidates) {
-    const counts = lines.map(l => (l.match(new RegExp('\\' + (sep === '\t' ? '\\t' : sep), 'g')) || []).length);
-    const uniqueCounts = new Set(counts);
-    const constant = uniqueCounts.size === 1 ? 2 : 1;
-    const avgCols = counts.reduce((a, b) => a + b, 0) / counts.length;
-    const score = constant * 10 + (avgCols > 1 ? avgCols : 0);
-    if (score > bestScore) {
-      bestScore = score;
-      best = sep;
-    }
+  const counts: Record<',' | ';' | '\t', number> = { ',': 0, ';': 0, '\t': 0 };
+  let quoted = false;
+  for (let index = 0; index < text.length; index++) {
+    const char = text[index];
+    if (char === '"') {
+      if (quoted && text[index + 1] === '"') index++;
+      else quoted = !quoted;
+    } else if (!quoted && (char === '\n' || char === '\r')) break;
+    else if (!quoted && char in counts) counts[char as ',' | ';' | '\t']++;
   }
-  return best;
+  return (Object.entries(counts).sort((a, b) => b[1] - a[1])[0]?.[0] as ',' | ';' | '\t') || ',';
 }
 
-/**
- * Découpe une ligne CSV en champs en gérant les guillemets doubles (escape "" -> ").
- */
-function parseCsvLine(line: string, sep: ',' | ';' | '\t'): string[] {
-  const fields: string[] = [];
-  let i = 0;
-  const sepChar = sep === '\t' ? '\t' : sep;
-  while (i < line.length) {
-    if (line[i] === '"') {
-      i++; // skip opening quote
-      let field = '';
-      while (i < line.length) {
-        if (line[i] === '"') {
-          if (i + 1 < line.length && line[i + 1] === '"') {
-            field += '"';
-            i += 2;
-          } else {
-            i++; // skip closing quote
-            break;
-          }
-        } else {
-          field += line[i];
-          i++;
-        }
-      }
-      while (i < line.length && line[i] !== sepChar) i++;
-      if (i < line.length) i++; // skip sep
-      fields.push(field);
-    } else {
-      const end = line.indexOf(sepChar, i);
-      if (end === -1) {
-        fields.push(line.slice(i));
-        i = line.length;
-      } else {
-        fields.push(line.slice(i, end));
-        i = end + 1;
-      }
+function parseCsvRecords(text: string, separator: ',' | ';' | '\t'): string[][] {
+  const records: string[][] = [];
+  let record: string[] = [];
+  let field = '';
+  let quoted = false;
+  let closedQuote = false;
+  const pushField = () => { record.push(field); field = ''; closedQuote = false; };
+  const pushRecord = () => {
+    pushField();
+    if (record.some(value => value.trim() !== '')) records.push(record);
+    record = [];
+  };
+
+  for (let index = 0; index < text.length; index++) {
+    const char = text[index];
+    if (quoted) {
+      if (char === '"' && text[index + 1] === '"') { field += '"'; index++; }
+      else if (char === '"') { quoted = false; closedQuote = true; }
+      else field += char;
+      continue;
     }
+    if (closedQuote && char !== separator && char !== '\r' && char !== '\n' && !/\s/.test(char)) {
+      throw new Error('CSV_INVALID_QUOTE');
+    }
+    if (char === '"') {
+      if (field.length !== 0) throw new Error('CSV_INVALID_QUOTE');
+      quoted = true;
+    } else if (char === separator) pushField();
+    else if (char === '\n' || char === '\r') {
+      if (char === '\r' && text[index + 1] === '\n') index++;
+      pushRecord();
+    } else if (!closedQuote) field += char;
   }
-  return fields;
+  if (quoted) throw new Error('CSV_UNCLOSED_QUOTE');
+  if (record.length || field.length || closedQuote) pushRecord();
+  return records;
 }
 
 /**
@@ -80,31 +69,28 @@ function parseCsvLine(line: string, sep: ',' | ';' | '\t'): string[] {
  * rows: tableau d'objets keyé par les headers.
  */
 export function parseCsvText(text: string): { headers: string[]; rows: Record<string, any>[]; rawCells: any[][] } {
-  let cleaned = text.replace(BOM, '');
-  cleaned = cleaned.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
-  const lines = cleaned.split('\n');
-  while (lines.length > 0 && lines[lines.length - 1].trim() === '') lines.pop();
-  if (lines.length === 0) return { headers: [], rows: [], rawCells: [] };
+  const cleaned = text.replace(BOM, '');
+  const records = parseCsvRecords(cleaned, detectCsvSeparator(cleaned));
+  if (records.length === 0) return { headers: [], rows: [], rawCells: [] };
 
-  const sep = detectCsvSeparator(cleaned);
-  const rawCells: any[][] = [];
-  const headers: string[] = [];
+  const originalHeaders = records[0].map(header => header.trim());
+  const retained = originalHeaders.map((header, index) => ({ header, index })).filter(item => item.header !== '');
+  const headers = retained.map(item => item.header);
+  if (headers.length === 0) throw new Error('CSV_HEADERS_REQUIRED');
+  const normalized = headers.map(header => header.toLocaleLowerCase());
+  if (new Set(normalized).size !== normalized.length) throw new Error('CSV_DUPLICATE_HEADERS');
+
   const rows: Record<string, any>[] = [];
-
-  const headerFields = parseCsvLine(lines[0], sep);
-  for (const h of headerFields) headers.push(h.trim());
-  rawCells.push(headerFields);
-
-  for (let li = 1; li < lines.length; li++) {
-    const fields = parseCsvLine(lines[li], sep);
-    rawCells.push(fields);
-    const row: Record<string, any> = {};
-    for (let ci = 0; ci < headers.length; ci++) {
-      row[headers[ci]] = ci < fields.length ? fields[ci] : '';
+  const rawCells: any[][] = [headers];
+  for (const record of records.slice(1)) {
+    if (record.length > originalHeaders.length && record.slice(originalHeaders.length).some(value => value.trim())) {
+      throw new Error('CSV_COLUMN_COUNT_MISMATCH');
     }
+    const row: Record<string, any> = {};
+    for (const { header, index } of retained) row[header] = record[index] ?? '';
     rows.push(row);
+    rawCells.push(retained.map(({ index }) => record[index] ?? ''));
   }
-
   return { headers, rows, rawCells };
 }
 
@@ -114,8 +100,8 @@ export function parseCsvText(text: string): { headers: string[]; rows: Record<st
  */
 export function bufferToText(buffer: ArrayBuffer): string {
   const bytes = new Uint8Array(buffer);
-  const decoder = new TextDecoder('utf-8');
-  return decoder.decode(bytes);
+  try { return new TextDecoder('utf-8', { fatal: true }).decode(bytes); }
+  catch { return new TextDecoder('windows-1252').decode(bytes); }
 }
 
 /**
@@ -136,16 +122,37 @@ export async function analyzeFiles(files: OriginalFile[]): Promise<AnalyzedSheet
         rawCells,
       });
     } else if (file.mime === 'xlsx') {
-      const sheets = file.sheets && file.sheets.length ? file.sheets : ['Sheet1'];
-      for (const sheetName of sheets) {
-        result.push({
-          fileId: file.id,
-          sheetName,
-          headers: [],
-          rows: [],
-          rawCells: [],
-        });
+      const ExcelJS = await import('exceljs');
+      const workbook = new ExcelJS.Workbook();
+      await workbook.xlsx.load(file.buffer);
+      if (workbook.worksheets.length === 0) throw new Error('XLSX_NO_SHEETS');
+      for (const worksheet of workbook.worksheets) {
+        if (worksheet.rowCount > 10001 || worksheet.columnCount > 100) throw new Error('IMPORT_SHEET_TOO_LARGE');
+        const headers = Array.from({ length: worksheet.columnCount }, (_, index) => String(worksheet.getRow(1).getCell(index + 1).value ?? '').trim());
+        const rows: Record<string, any>[] = [];
+        const rawCells: any[][] = [headers];
+        for (let rowNumber = 2; rowNumber <= worksheet.rowCount; rowNumber++) {
+          const excelRow = worksheet.getRow(rowNumber);
+          const values = headers.map((_, columnIndex) => {
+            const value = excelRow.getCell(columnIndex + 1).value;
+            if (value && typeof value === 'object' && 'richText' in value) return value.richText.map((part: any) => part.text).join('');
+            if (value && typeof value === 'object' && ('formula' in value || 'sharedFormula' in value)) return value;
+            if (value && typeof value === 'object' && 'text' in value && 'hyperlink' in value) return value.text;
+            return value ?? '';
+          });
+          if (values.every(value => value === '' || value == null)) continue;
+          const row: Record<string, any> = {};
+          headers.forEach((header, index) => { if (header) row[header] = values[index]; });
+          rows.push(row);
+          rawCells.push(values);
+        }
+        if (headers.filter(Boolean).length === 0) throw new Error('XLSX_HEADERS_REQUIRED');
+        const normalizedHeaders = headers.filter(Boolean).map(header => header.toLocaleLowerCase());
+        if (new Set(normalizedHeaders).size !== normalizedHeaders.length) throw new Error('XLSX_DUPLICATE_HEADERS');
+        result.push({ fileId: file.id, sheetName: worksheet.name, headers: headers.filter(Boolean), rows, rawCells });
       }
+    } else {
+      throw new Error('IMPORT_FILE_UNSUPPORTED');
     }
   }
   return result;
@@ -182,21 +189,44 @@ export function parseEuroToCents(input: any): number | null {
   if (input === null || input === undefined || input === '') return null;
   if (typeof input === 'number') {
     if (!Number.isFinite(input)) return null;
-    return Math.round(input * 100);
+    const cents = Math.round(input * 100);
+    return Number.isSafeInteger(cents) ? cents : null;
   }
-  let s = String(input).trim();
-  s = s.replace(/€/g, '').replace(/\s+/g, '').trim();
-  // Gère "4.000,50" -> "4000.50" et "4000,50" -> "4000.50"
-  if (s.includes(',') && s.includes('.')) {
-    // Suppose . = séparateur milliers
-    s = s.replace(/\./g, '').replace(',', '.');
-  } else if (s.includes(',')) {
-    s = s.replace(',', '.');
+  let value = String(input).trim().replace(/[€\s\u00a0\u202f]/g, '').replace(/[−–]/g, '-');
+  if (!value) return null;
+  let sign = 1;
+  if (value.startsWith('(') && value.endsWith(')')) { sign = -1; value = value.slice(1, -1); }
+  if (value.startsWith('-') || value.startsWith('+')) { if (value[0] === '-') sign *= -1; value = value.slice(1); }
+  if (!value || /[+-]/.test(value)) return null;
+
+  const commaCount = (value.match(/,/g) ?? []).length;
+  const dotCount = (value.match(/\./g) ?? []).length;
+  let decimalSeparator = '';
+  let groupingSeparator = '';
+  if (commaCount && dotCount) {
+    decimalSeparator = value.lastIndexOf(',') > value.lastIndexOf('.') ? ',' : '.';
+    groupingSeparator = decimalSeparator === ',' ? '.' : ',';
+    if ((decimalSeparator === ',' ? commaCount : dotCount) !== 1) return null;
+  } else if (commaCount === 1) decimalSeparator = ',';
+  else if (dotCount === 1) {
+    const after = value.length - value.lastIndexOf('.') - 1;
+    if (after === 3 && /^\d{1,3}(?:\.\d{3})+$/.test(value)) groupingSeparator = '.';
+    else decimalSeparator = '.';
+  } else if (dotCount > 1) groupingSeparator = '.';
+
+  const parts = decimalSeparator ? value.split(decimalSeparator) : [value];
+  if (parts.length > 2 || (parts[1] !== undefined && !/^\d{1,2}$/.test(parts[1]))) return null;
+  let whole = parts[0];
+  if (groupingSeparator) {
+    const grouped = whole.split(groupingSeparator);
+    if (!/^\d{1,3}$/.test(grouped[0]) || grouped.slice(1).some(group => !/^\d{3}$/.test(group))) return null;
+    whole = grouped.join('');
   }
-  s = s.replace(/[^\d.-]/g, '');
-  const num = parseFloat(s);
-  if (isNaN(num)) return null;
-  return Math.round(num * 100);
+  if (!/^\d+$/.test(whole)) return null;
+  const wholeNumber = Number(whole);
+  const fraction = (parts[1] ?? '').padEnd(2, '0');
+  const cents = wholeNumber * 100 + Number(fraction || 0);
+  return Number.isSafeInteger(cents) ? sign * cents : null;
 }
 
 // Dates FR: "15/01/2026", "15-01-2026", "15.01.2026", "2026-01-15", Date object
@@ -204,9 +234,15 @@ export function parseFrenchDate(input: any): Date | null {
   if (!input) return null;
   if (input instanceof Date && !isNaN(input.getTime())) return input;
   const s = String(input).trim();
-  // ISO
-  const iso = new Date(s);
-  if (!isNaN(iso.getTime()) && /^\d{4}-\d{2}-\d{2}/.test(s)) return iso;
+  // ISO (vérifie les composantes pour refuser les dates rollover comme le 31 février).
+  const isoMatch = s.match(/^(\d{4})-(\d{2})-(\d{2})(?:T.*)?$/);
+  if (isoMatch) {
+    const year = Number(isoMatch[1]); const month = Number(isoMatch[2]); const day = Number(isoMatch[3]);
+    const calendarDate = new Date(Date.UTC(year, month - 1, day));
+    const iso = new Date(s);
+    if (Number.isFinite(iso.getTime()) && calendarDate.getUTCFullYear() === year && calendarDate.getUTCMonth() + 1 === month && calendarDate.getUTCDate() === day) return iso;
+    return null;
+  }
 
   // FR JJ/MM/AAAA ou JJ-MM-AAAA ou JJ.MM.AAAA
   const frMatch = s.match(/^(\d{1,2})[\/\.\-](\d{1,2})[\/\.\-](\d{2,4})$/);
@@ -216,7 +252,7 @@ export function parseFrenchDate(input: any): Date | null {
     let y = parseInt(frMatch[3], 10);
     if (y < 100) y += 2000;
     const dt = new Date(y, m, d);
-    if (!isNaN(dt.getTime())) return dt;
+    if (!isNaN(dt.getTime()) && dt.getFullYear() === y && dt.getMonth() === m && dt.getDate() === d) return dt;
   }
   return null;
 }

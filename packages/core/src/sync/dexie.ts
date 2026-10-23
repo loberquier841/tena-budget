@@ -12,6 +12,7 @@ export interface LocalTransaction {
   amountCents: number;
   bookingDate: Date;
   label: string;
+  source?: Transaction['source'];
   categoryId?: string;
   personId?: string;
   isDeleted: boolean;
@@ -309,10 +310,50 @@ export async function saveLocalTransaction(tx: LocalTransaction): Promise<void> 
   });
 }
 
+/** Add imported transactions without ever replacing existing rows; both records and sync queue commit atomically. */
+export async function importLocalTransactionsBatch(input: Array<Pick<LocalTransaction, 'familyId' | 'amountCents' | 'bookingDate' | 'label' | 'categoryId'>>): Promise<LocalTransaction[]> {
+  if (!input.length) return [];
+  const familyId = input[0].familyId?.trim();
+  if (!familyId || input.some(item => item.familyId !== familyId)) throw new Error('LOCAL_IMPORT_FAMILY_INVALID');
+  const now = new Date();
+  const transactions: LocalTransaction[] = input.map(item => {
+    if (!Number.isSafeInteger(item.amountCents) || item.amountCents === 0) throw new Error('LOCAL_IMPORT_AMOUNT_INVALID');
+    if (!(item.bookingDate instanceof Date) || !Number.isFinite(item.bookingDate.getTime())) throw new Error('LOCAL_IMPORT_DATE_INVALID');
+    const label = item.label.trim();
+    if (!label) throw new Error('LOCAL_IMPORT_LABEL_REQUIRED');
+    return {
+      ...item, id: `tx_import_${crypto.randomUUID()}`, familyId, label,
+      source: 'import', isDeleted: false, createdAt: now, createdByUserId: 'local-owner',
+      syncStatus: 'pending', updatedAt: now,
+    };
+  });
+  const queueItems: SyncQueueItem[] = transactions.map(transaction => ({
+    id: `sync_${transaction.id}`, familyId, entity: 'transaction', entityId: transaction.id,
+    operation: 'create', payload: transaction, createdAt: now, attempts: 0,
+  }));
+  const [storedTransactions, storedQueue] = await Promise.all([
+    Promise.all(transactions.map(item => encodeLocalRecord('transactions', item))),
+    Promise.all(queueItems.map(item => encodeLocalRecord('syncQueue', item))),
+  ]);
+  await db.transaction('rw', db.transactions, db.syncQueue, async () => {
+    const existingIds = await db.transactions.bulkGet(transactions.map(item => item.id));
+    if (existingIds.some(Boolean)) throw new Error('LOCAL_IMPORT_ID_CONFLICT');
+    await db.transactions.bulkAdd(storedTransactions);
+    await db.syncQueue.bulkAdd(storedQueue);
+  });
+  return transactions;
+}
+
 export async function getLocalTransactions(familyId: string): Promise<LocalTransaction[]> {
   const rows = await db.transactions.where('familyId').equals(familyId).toArray();
   const items = await Promise.all(rows.map(row => decodeLocalRecord('transactions', row)));
   return items.filter(transaction => !transaction.isDeleted).sort((a, b) => b.bookingDate.getTime() - a.bookingDate.getTime());
+}
+
+/** Reads active and soft-deleted rows for a complete backup. */
+export async function getLocalBackupTransactions(familyId: string): Promise<LocalTransaction[]> {
+  const rows = await db.transactions.where('familyId').equals(familyId).toArray();
+  return Promise.all(rows.map(row => decodeLocalRecord('transactions', row)));
 }
 
 export async function getLocalDeletedTransactions(familyId: string): Promise<LocalTransaction[]> {
@@ -324,7 +365,7 @@ export async function getLocalDeletedTransactions(familyId: string): Promise<Loc
 function asCoreTransaction(transaction: LocalTransaction): Transaction {
   return {
     ...transaction,
-    source: 'manual',
+    source: transaction.source ?? 'manual',
     createdAt: transaction.createdAt ?? transaction.bookingDate,
     updatedAt: transaction.updatedAt,
     createdByUserId: transaction.createdByUserId ?? 'local-owner',
@@ -411,6 +452,12 @@ export async function getLocalSavingGoals(familyId: string): Promise<LocalSaving
   const rows = await db.savingGoals.where('familyId').equals(familyId).toArray();
   const goals = await Promise.all(rows.map(row => decodeLocalRecord('savingGoals', row)));
   return goals.filter(goal => !goal.isDeleted).sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime());
+}
+
+/** Reads active and soft-deleted goals for a complete backup. */
+export async function getLocalBackupSavingGoals(familyId: string): Promise<LocalSavingGoal[]> {
+  const rows = await db.savingGoals.where('familyId').equals(familyId).toArray();
+  return Promise.all(rows.map(row => decodeLocalRecord('savingGoals', row)));
 }
 
 export async function saveLocalSavingGoal(goal: SavingGoal, contribution?: SavingContribution): Promise<void> {

@@ -28,6 +28,7 @@ import 'budget_service.dart';
 import 'crypto_service.dart';
 import 'database_service.dart';
 import 'goal_service.dart';
+import 'category_service.dart';
 import 'user_profile_service.dart';
 
 /// Service de sauvegarde et restauration locale.
@@ -73,12 +74,14 @@ class BackupService {
     final transactions = await _collectTransactions();
     final budgets = await _collectBudgets();
     final goals = await _collectGoals();
+    final categories = await CategoryService.getCategories();
 
     return BackupData(
       profile: profile,
       transactions: transactions,
       budgets: budgets,
       goals: goals,
+      categories: categories,
     );
   }
 
@@ -214,7 +217,7 @@ class BackupService {
 
     // 3. Vérification de la version
     final version = raw['version'] as int?;
-    if (version == null || version != backupFormatVersion) {
+    if (version == null || version < 1 || version > backupFormatVersion) {
       return const BackupValidationResult.invalid(
         'BACKUP_VERSION_UNSUPPORTED',
       );
@@ -431,6 +434,25 @@ class BackupService {
     final summary = result.summary!;
     final data = summary.data;
 
+    List<String>? categoriesToRestore;
+    if (summary.formatVersion >= 2) {
+      final uniqueNames = <String>{};
+      for (final category in data.categories) {
+        if (!uniqueNames.add(category.toLowerCase())) {
+          throw const BackupException(
+            'BACKUP_CATEGORIES_DUPLICATED',
+            'La sauvegarde contient des catégories en double.',
+          );
+        }
+      }
+      categoriesToRestore = replaceExisting
+          ? data.categories
+          : _mergeCategories(
+              await CategoryService.getCategories(),
+              data.categories,
+            );
+    }
+
     // Même un remplacement explicite ne permet pas des doublons ambigus dans
     // le fichier de sauvegarde lui-même.
     final duplicateIds = findRestoreConflicts(
@@ -487,6 +509,24 @@ class BackupService {
     if (data.profile != null) {
       await _restoreProfile(data.profile!);
     }
+
+    // Les sauvegardes v1 ne contenaient pas les catégories : ne pas remplacer
+    // les préférences existantes lorsqu'on restaure ce format historique.
+    if (categoriesToRestore != null) {
+      await CategoryService.saveCategories(categoriesToRestore);
+    }
+  }
+
+  static List<String> _mergeCategories(
+    List<String> existing,
+    List<String> restored,
+  ) {
+    final merged = List<String>.from(existing);
+    final names = existing.map((name) => name.toLowerCase()).toSet();
+    for (final category in restored) {
+      if (names.add(category.toLowerCase())) merged.add(category);
+    }
+    return merged;
   }
 
   static Future<void> _restoreTransaction(Map<String, dynamic> json) async {

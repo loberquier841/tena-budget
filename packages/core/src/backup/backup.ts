@@ -1,6 +1,6 @@
 
 import { Role, assertCan } from "../permissions/permissions";
-import type { UserProfile } from "../product/profile";
+import type { OnboardingProgress, UserProfile } from "../product/profile";
 
 // Sauvegardes chiffrées - Web Crypto API native (AES-GCM 256) - aucune clé exposée frontend/logs
 
@@ -15,7 +15,7 @@ export interface BackupData {
   goals: any[];
   savingContributions?: any[];
   recurringRules: any[];
-  userProfile?: UserProfile;
+  userProfile?: UserProfile | OnboardingProgress;
   checksum: string; // SHA-256 pour intégrité
 }
 
@@ -52,23 +52,22 @@ export async function generateChecksum(data: string): Promise<string> {
   return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
-export async function createBackup(input: { familyId: string; transactions: any[]; budgets: any[]; categories: any[]; persons: any[]; goals: any[]; savingContributions?: any[]; recurringRules: any[]; userProfile?: UserProfile }, role: Role): Promise<BackupData> {
+export async function createBackup(input: { familyId: string; transactions: any[]; budgets: any[]; categories: any[]; persons: any[]; goals: any[]; savingContributions?: any[]; recurringRules: any[]; userProfile?: UserProfile | OnboardingProgress }, role: Role): Promise<BackupData> {
   assertCan(role, "budget:read");
   if (!input.familyId) throw new Error("BACKUP_FAMILY_REQUIRED");
   const collections = [input.transactions, input.budgets, input.categories, input.persons, input.goals, input.savingContributions ?? [], input.recurringRules];
   if (collections.some(records => records.some((record: any) => record?.familyId && record.familyId !== input.familyId))) throw new Error("BACKUP_FAMILY_MISMATCH");
-  const activeGoalIds = new Set(input.goals.filter((goal: any) => !goal.isDeleted).map((goal: any) => goal.id));
-  // Filtre isDeleted = false pour backup propre, mais garde deleted si besoin restauration
+  // Les suppressions sont logiques : la corbeille et les objectifs supprimés restent des données récupérables.
   const backup: BackupData = {
     version: "2.0",
     familyId: input.familyId,
     createdAt: new Date().toISOString(),
-    transactions: input.transactions.filter((t: any) => !t.isDeleted),
+    transactions: input.transactions,
     budgets: input.budgets,
     categories: input.categories,
     persons: input.persons,
-    goals: input.goals.filter((goal: any) => !goal.isDeleted),
-    savingContributions: (input.savingContributions ?? []).filter((contribution: any) => activeGoalIds.has(contribution.goalId)),
+    goals: input.goals,
+    savingContributions: input.savingContributions ?? [],
     recurringRules: input.recurringRules,
     ...(input.userProfile ? { userProfile: input.userProfile } : {}),
     checksum: "",

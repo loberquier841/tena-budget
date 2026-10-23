@@ -1,4 +1,4 @@
-* {
+.tena, .tena * {
   box-sizing: border-box;
 }
 
@@ -108,7 +108,7 @@
   display: grid; place-items: center; width: 24px; height: 24px; border-radius: 8px;
   color: #17130b; background: var(--gold); font-size: 13px;
 }
-.previewHeading { display: flex; align-items: end; justify-content: space-between; gap: 10px; margin: 25px 0 17px; }
+.previewHeading { display: flex; align-items: flex-end; justify-content: space-between; gap: 10px; margin: 25px 0 17px; }
 .previewLabel { color: #8f909a; font-size: 9px; letter-spacing: .12em; }
 .previewHeading h2 { margin: 6px 0 0; font-size: 18px; letter-spacing: -.02em; }
 .period { padding: 7px 9px; border: 1px solid #34343c; border-radius: 7px; color: #c7c7ce; font-size: 10px; }
@@ -122,7 +122,7 @@
 .chartTitle { color: #e7e5de; font-size: 10px; font-weight: 700; }
 .chartTitle span + span { color: #858793; font-size: 9px; font-weight: 400; }
 .chart {
-  height: 105px; display: flex; align-items: end; gap: 10px; padding: 12px 4px 9px;
+  height: 105px; display: flex; align-items: flex-end; gap: 10px; padding: 12px 4px 9px;
   border-bottom: 1px solid #ffffff17;
   background: repeating-linear-gradient(to bottom, transparent 0 25px, #ffffff08 26px);
 }
@@ -146,7 +146,7 @@
 .textLink:hover { text-decoration: underline; }
 
 .section { padding: 75px 0; border-top: 1px solid #ffffff12; }
-.sectionHeader { display: flex; align-items: end; justify-content: space-between; gap: 30px; }
+.sectionHeader { display: flex; align-items: flex-end; justify-content: space-between; gap: 30px; }
 .section h2, .faq h2 {
   margin: 11px 0 0; font-size: clamp(29px, 3.8vw, 43px); letter-spacing: -.04em;
 }

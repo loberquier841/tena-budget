@@ -103,11 +103,11 @@ describe("Sauvegardes chiffrées", () => {
     const backup = await createBackup({ familyId: "fam1", transactions: [], budgets: [], categories: [], persons: [], goals: [goal, deletedGoal], savingContributions: [contribution, deletedContribution], recurringRules: [] }, "owner");
     const encrypted = await encryptBackup(backup, "TestBackup123!");
     const decrypted = await decryptBackup(encrypted, "TestBackup123!");
-    expect(decrypted.goals).toHaveLength(1);
-    expect(decrypted.savingContributions).toHaveLength(1);
+    expect(decrypted.goals).toHaveLength(2);
+    expect(decrypted.savingContributions).toHaveLength(2);
     const restored = await restoreBackup(decrypted, { transactions: [], budgets: [], categories: [], goals: [], savingContributions: [] }, "owner", { overwrite: false });
-    expect(restored.toCreate.goals).toBe(1);
-    expect(restored.toCreate.savingContributions).toBe(1);
+    expect(restored.toCreate.goals).toBe(2);
+    expect(restored.toCreate.savingContributions).toBe(2);
     const conflict = await restoreBackup(decrypted, { transactions: [], budgets: [], categories: [], goals: [goal], savingContributions: [] }, "owner", { overwrite: false });
     expect(conflict.conflicts).toContain("Objectif goal_1 existe déjà");
   });

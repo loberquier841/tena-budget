@@ -1,6 +1,7 @@
 
 export * from "./types";
 export * from "./parser";
+export * from "./localImport";
 export * from "./detector";
 export * from "./pipeline";
 export * from "./duplicate";

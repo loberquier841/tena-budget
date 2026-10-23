@@ -15,12 +15,15 @@ import {
   type NotificationPreference,
   type DashboardCardId,
 } from '@tena/core';
-import { createLocalVault, activateLocalVault } from '@tena/core/localVault';
+import { isLocalVaultUnlocked } from '@tena/core/localVault';
 import {
   saveLocalUserProfile,
   getLocalUserProfile,
   saveLocalOnboardingProgress,
   getLocalOnboardingProgress,
+  getLocalVaultStatus,
+  createLocalVaultAndMigrate,
+  unlockLocalDatabase,
 } from '@tena/core/sync/dexie';
 
 type OnboardingStep =
@@ -116,16 +119,23 @@ export default function OnboardingPage() {
   const [profile, setProfile] = useState<any>(null);
   const [recommendation, setRecommendation] = useState<any>(null);
   const [vaultReady, setVaultReady] = useState(false);
+  const [vaultMode, setVaultMode] = useState<'create' | 'unlock'>('create');
 
   useEffect(() => {
     let mounted = true;
     async function restore() {
       try {
+        const vault = await getLocalVaultStatus();
+        if (vault.configured && !isLocalVaultUnlocked()) {
+          if (mounted) setVaultMode('unlock');
+          return;
+        }
         const existing = await getLocalUserProfile();
         if (existing) {
           router.replace('/dashboard');
           return;
         }
+        if (vault.configured && mounted) setVaultReady(true);
         const progress = await getLocalOnboardingProgress();
         if (progress && progress.answers) {
           setAnswers({ ...progress.answers });
@@ -146,6 +156,39 @@ export default function OnboardingPage() {
     return () => { mounted = false; };
   }, [router]);
 
+  const handleVaultUnlock = useCallback(async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    setIsLoading(true);
+    try {
+      await unlockLocalDatabase(passphrase);
+      setVaultReady(true);
+      const existing = await getLocalUserProfile();
+      if (existing) {
+        router.replace('/dashboard');
+        return;
+      }
+      const progress = await getLocalOnboardingProgress();
+      if (progress?.answers) {
+        setAnswers({ ...progress.answers });
+        const steps: OnboardingStep[] = [
+          'householdMode', 'incomePattern', 'budgetExperience', 'priorities',
+          'wantedFeatures', 'notificationPreference', 'summary',
+        ];
+        const nextStepIndex = Math.min(Math.max(progress.currentStep, 0), steps.length - 1);
+        setStep(steps[nextStepIndex]);
+      } else {
+        setStep('householdMode');
+      }
+    } catch (err: any) {
+      setError(err.message === 'LOCAL_VAULT_PASSWORD_INVALID'
+        ? 'Phrase secrète incorrecte. Tes données n’ont pas été modifiées.'
+        : 'Impossible de déverrouiller le coffre local. Vérifie ta phrase secrète et réessaie.');
+    } finally {
+      setIsLoading(false);
+    }
+  }, [passphrase, router]);
+
   const handleVaultCreate = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
@@ -159,8 +202,7 @@ export default function OnboardingPage() {
     }
     setIsLoading(true);
     try {
-      const { metadata, key } = await createLocalVault(passphrase);
-      activateLocalVault(key);
+      await createLocalVaultAndMigrate(passphrase);
       setVaultReady(true);
       setStep('householdMode');
       const now = new Date().toISOString();
@@ -242,6 +284,36 @@ export default function OnboardingPage() {
   }, [answers]);
 
   if (step === 'vault') {
+    if (vaultMode === 'unlock') {
+      return (
+        <main style={{ padding: 24, maxWidth: 480, margin: '0 auto', background: '#fafafa', minHeight: '100vh' }}>
+          <h1 style={{ fontSize: 26, marginBottom: 8 }}>TENΛ Budget — Déverrouiller</h1>
+          <p style={{ color: '#666', marginBottom: 24 }}>
+            Ton coffre local existe déjà sur cet appareil. Saisis ta phrase secrète pour retrouver ton profil et tes données chiffrées.
+          </p>
+          {error && <p role="alert" style={{ color: '#b42318', marginBottom: 16 }}>{error}</p>}
+          <form onSubmit={handleVaultUnlock} style={{ background: 'white', padding: 24, borderRadius: 12, border: '1px solid #e5e7eb' }}>
+            <label htmlFor="vault-passphrase" style={{ display: 'block', fontWeight: 600, marginBottom: 6 }}>Phrase secrète</label>
+            <input
+              id="vault-passphrase"
+              type="password"
+              value={passphrase}
+              onChange={event => setPassphrase(event.target.value)}
+              autoComplete="current-password"
+              required
+              style={{ width: '100%', padding: 12, borderRadius: 8, border: '1px solid #d1d5db', marginBottom: 16 }}
+            />
+            <button type="submit" disabled={isLoading || !passphrase} style={{ width: '100%', padding: 12, border: 0, borderRadius: 8, background: '#7C3AED', color: 'white', fontWeight: 700, cursor: isLoading ? 'wait' : 'pointer' }}>
+              {isLoading ? 'Déverrouillage…' : 'Déverrouiller mon espace'}
+            </button>
+          </form>
+          <p style={{ marginTop: 16, color: '#777', fontSize: 13 }}>La phrase est vérifiée localement et n’est jamais envoyée.</p>
+          <p style={{ marginTop: 12, color: '#777', fontSize: 13, lineHeight: 1.6 }}>
+            Si tu as perdu cette phrase, TENΛ ne peut pas déverrouiller ce coffre. Avec une sauvegarde chiffrée et son mot de passe, crée un nouveau coffre dans un autre navigateur ou sur un autre appareil, puis restaure ce fichier. Les données ajoutées depuis la dernière sauvegarde ne pourront pas être récupérées. Ne supprime pas ce coffre avant d’avoir vérifié ta sauvegarde.
+          </p>
+        </main>
+      );
+    }
     return (
       <main style={{ padding: 24, maxWidth: 480, margin: '0 auto', background: '#fafafa', minHeight: '100vh' }}>
         <h1 style={{ fontSize: 26, marginBottom: 8 }}>TENΛ Budget — Onboarding</h1>

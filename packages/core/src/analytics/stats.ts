@@ -33,11 +33,11 @@ export function getSpendingByCategory(transactions: Transaction[], categories: C
   const parents = categories.filter(c => !c.parentId && !c.isArchived);
   return parents.map(parent => {
     const parentTx = valid.filter(t => t.categoryId === parent.id || categories.find(c => c.id === t.categoryId)?.parentId === parent.id);
-    const totalCents = parentTx.reduce((sum, t) => sum + t.amountCents, 0); // Int only
+    const totalCents = parentTx.reduce((sum, t) => sum + Math.abs(t.amountCents), 0); // dépenses bancaires souvent signées négativement
     const children = categories.filter(c => c.parentId === parent.id && !c.isArchived);
     const subCategories = children.map(child => {
       const childTx = valid.filter(t => t.categoryId === child.id);
-      return { subId: child.id, name: child.name, totalCents: childTx.reduce((s, t) => s + t.amountCents, 0) };
+      return { subId: child.id, name: child.name, totalCents: childTx.reduce((s, t) => s + Math.abs(t.amountCents), 0) };
     });
     return { categoryId: parent.id, categoryName: parent.name, totalCents, count: parentTx.length, subCategories };
   }).filter(r => r.totalCents !== 0 || r.subCategories.some(sc => sc.totalCents !== 0));
@@ -49,7 +49,7 @@ export function getSpendingByPerson(transactions: Transaction[], filters: Omit<S
   for (const t of valid) {
     const pid = t.personId || '__no_person__';
     const entry = map.get(pid) || { totalCents: 0, count: 0 };
-    entry.totalCents += t.amountCents; // Int
+    entry.totalCents += Math.abs(t.amountCents); // Int
     entry.count += 1;
     map.set(pid, entry);
   }
@@ -64,7 +64,7 @@ export function getMonthlyEvolution(transactions: Transaction[], filters: StatsF
     const month = t.bookingDate.getMonth() + 1;
     const key = `${year}-${month}`;
     const entry = map.get(key) || { year, month, totalCents: 0, count: 0 };
-    entry.totalCents += t.amountCents;
+    entry.totalCents += Math.abs(t.amountCents);
     entry.count += 1;
     map.set(key, entry);
   }
@@ -77,7 +77,7 @@ export function getAnnualEvolution(transactions: Transaction[], filters: StatsFi
   for (const t of valid) {
     const year = t.bookingDate.getFullYear();
     const entry = map.get(year) || { year, totalCents: 0, count: 0 };
-    entry.totalCents += t.amountCents;
+    entry.totalCents += Math.abs(t.amountCents);
     entry.count += 1;
     map.set(year, entry);
   }
@@ -101,8 +101,8 @@ export function getBudgetVsSpent(budgets: Budget[], transactions: Transaction[],
   const validTx = filterValidTransactions(transactions, filters);
 
   return filteredBudgets.map(b => {
-    const relevant = validTx.filter(t => (b.categoryId ? t.categoryId === b.categoryId : true) && (b.personId ? t.personId === b.personId : true) && (b.id ? (t.budgetId === b.id || !t.budgetId) : true));
-    const spentCents = relevant.reduce((s, t) => s + t.amountCents, 0);
+    const relevant = validTx.filter(t => t.bookingDate.getFullYear() === b.year && (!b.month || t.bookingDate.getMonth() + 1 === b.month) && (b.categoryId ? t.categoryId === b.categoryId : true) && (b.personId ? t.personId === b.personId : true) && (b.id ? (t.budgetId === b.id || !t.budgetId) : true));
+    const spentCents = relevant.reduce((s, t) => s + Math.abs(t.amountCents), 0);
     const remainingCents = b.amountCents - spentCents; // Int - Int = Int
     if (!Number.isInteger(spentCents) || !Number.isInteger(remainingCents)) throw new Error("STATS_INT_ONLY");
     return {

@@ -1,5 +1,7 @@
 'use client';
 
+import React from 'react';
+
 // Graphiques réutilisables par le tableau de bord et la page de présentation.
 // Les montants restent en centimes entiers jusqu'à leur éventuel affichage.
 export function CategoryChart({ data }: { data: { name: string; totalCents: number; color: string }[] }) {

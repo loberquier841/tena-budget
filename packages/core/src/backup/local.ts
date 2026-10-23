@@ -1,7 +1,7 @@
 import { Role, assertCan } from "../permissions/permissions";
 import { BackupData, createBackup, restoreBackup } from "./backup";
 import { validateOnboardingAnswers } from "../product/profile";
-import { db, encodeLocalRecord, getLocalSavingContributions, getLocalTransactions, getLocalBudgets, getLocalSavingGoals, getLocalUserProfile, LocalBudget, LocalSavingContribution, LocalSavingGoal, LocalTransaction, SyncQueueItem } from "../sync/dexie";
+import { db, encodeLocalRecord, getLocalSavingContributions, getLocalBackupTransactions, getLocalBudgets, getLocalBackupSavingGoals, getLocalOnboardingProgress, getLocalUserProfile, LocalBudget, LocalSavingContribution, LocalSavingGoal, LocalTransaction, SyncQueueItem } from "../sync/dexie";
 
 function queueItem(familyId: string, entity: SyncQueueItem["entity"], entityId: string, payload: unknown, createdAt: Date): SyncQueueItem {
   return {
@@ -19,10 +19,9 @@ function queueItem(familyId: string, entity: SyncQueueItem["entity"], entityId: 
 export async function createLocalBackup(familyId: string, role: Role): Promise<BackupData> {
   assertCan(role, "budget:read");
   const [transactions, budgets, goals, contributions] = await Promise.all([
-    getLocalTransactions(familyId), getLocalBudgets(familyId), getLocalSavingGoals(familyId), getLocalSavingContributions(familyId),
+    getLocalBackupTransactions(familyId), getLocalBudgets(familyId), getLocalBackupSavingGoals(familyId), getLocalSavingContributions(familyId),
   ]);
-  const userProfile = await getLocalUserProfile();
-  const activeGoalIds = new Set(goals.map(goal => goal.id));
+  const [userProfile, onboardingProgress] = await Promise.all([getLocalUserProfile(), getLocalOnboardingProgress()]);
 
   return createBackup({
     familyId,
@@ -31,9 +30,9 @@ export async function createLocalBackup(familyId: string, role: Role): Promise<B
     categories: [],
     persons: [],
     goals,
-    savingContributions: contributions.filter(contribution => activeGoalIds.has(contribution.goalId)),
+    savingContributions: contributions,
     recurringRules: [],
-    userProfile,
+    userProfile: userProfile ?? onboardingProgress,
   }, role);
 }
 
@@ -66,7 +65,8 @@ export async function restoreLocalBackup(backup: BackupData, familyId: string, r
     ...record,
     bookingDate: dateValue(record.bookingDate, "transaction.bookingDate"),
     updatedAt: dateValue(record.updatedAt ?? record.bookingDate, "transaction.updatedAt"),
-    isDeleted: false,
+    isDeleted: record.isDeleted,
+    deletedAt: record.deletedAt ? dateValue(record.deletedAt, "transaction.deletedAt") : undefined,
     syncStatus: "pending" as const,
   })) as LocalTransaction[];
   const budgets = backup.budgets.map((record: any) => ({
