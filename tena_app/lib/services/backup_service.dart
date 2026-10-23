@@ -3,8 +3,8 @@
 /// Le système collecte les données disponibles depuis les sources existantes :
 /// - Profil utilisateur (SQLite, chiffré AES-GCM via [DatabaseService])
 /// - Transactions (SQLite, champs sensibles chiffrés via [CryptoService])
-/// - Budgets (SharedPreferences via [BudgetService])
-/// - Objectifs (SharedPreferences via [GoalService])
+/// - Budgets (SQLite via [DatabaseService])
+/// - Objectifs (SQLite via [DatabaseService])
 ///
 /// Le format de sauvegarde est versionné, structuré et validable. Une
 /// empreinte SHA-256 garantit l'intégrité. Le fichier peut être chiffré en
@@ -375,13 +375,19 @@ class BackupService {
     }
 
     final budgetData = data.budgets;
-    if (budgetData['global'] != null && budgetIds.contains('global')) {
+    final globalBudget = budgetData['global'];
+    if (globalBudget is num &&
+        globalBudget > 0 &&
+        budgetIds.contains('global')) {
       conflicts.add('budget:global');
     }
     final categories = budgetData['categories'] as Map? ?? const {};
     for (final category in categories.keys) {
       final id = category.toString();
-      if (budgetIds.contains(id)) conflicts.add('budget:' + id);
+      final amount = categories[category];
+      if (amount is num && amount > 0 && budgetIds.contains(id)) {
+        conflicts.add('budget:' + id);
+      }
     }
 
     final seenGoalIds = <String>{};
