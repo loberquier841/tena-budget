@@ -376,6 +376,26 @@ void main() {
       expect(summary.balance, 2250);
     });
 
+    test('exclut les transferts des revenus et dépenses globales', () async {
+      await database.insertTransaction(
+        _transaction(id: 'transfer-income', amount: 300, date: DateTime(2026, 3, 4),
+            type: TransactionType.income),
+      );
+      await database.insertTransaction(
+        _transaction(id: 'transfer-expense', amount: 100, date: DateTime(2026, 3, 5)),
+      );
+      await database.insertTransaction(
+        _transaction(id: 'transfer-only', amount: 500, date: DateTime(2026, 3, 6),
+            type: TransactionType.transfer),
+      );
+
+      final summary = await FinanceService.getSummaryForMonth(DateTime(2026, 3));
+
+      expect(summary.income, 300);
+      expect(summary.expenses, 100);
+      expect(summary.balance, 200);
+    });
+
     test('ne conserve que les 5 transactions les plus récentes', () async {
       for (var day = 1; day <= 8; day++) {
         await database.insertTransaction(

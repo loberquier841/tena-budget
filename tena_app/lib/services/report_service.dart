@@ -77,7 +77,10 @@ class ReportService {
     required int comparedMonths,
   }) {
     final monthTransactions = transactions.where((t) {
-      return t.date.year == month.year && t.date.month == month.month;
+      return !t.isDeleted &&
+          t.type != TransactionType.transfer &&
+          t.date.year == month.year &&
+          t.date.month == month.month;
     }).toList();
 
     double income = 0;
@@ -85,9 +88,14 @@ class ReportService {
     final byCategory = <String, double>{};
 
     for (final transaction in monthTransactions) {
+      if (transaction.isDeleted ||
+          transaction.type == TransactionType.transfer) {
+        continue;
+      }
+
       if (transaction.type == TransactionType.income) {
         income += transaction.amount;
-      } else {
+      } else if (transaction.type == TransactionType.expense) {
         expenses += transaction.amount;
 
         byCategory.update(
@@ -164,6 +172,10 @@ class ReportService {
     final months = <String>{};
 
     for (final transaction in transactions) {
+      if (transaction.isDeleted ||
+          transaction.type == TransactionType.transfer) {
+        continue;
+      }
       months.add(_monthKey(transaction.date));
     }
 

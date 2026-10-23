@@ -404,9 +404,13 @@ class BackupService {
       category: json['category'] as String,
       description: json['description'] as String,
       date: DateTime.parse(json['date'] as String),
-      type: json['type'] == 'income'
-          ? TransactionType.income
-          : TransactionType.expense,
+      type: switch (json['type']) {
+        'income' => TransactionType.income,
+        'expense' => TransactionType.expense,
+        'transfer' => TransactionType.transfer,
+        final unknown => throw FormatException(
+            'Type de transaction inconnu dans la sauvegarde : "$unknown"'),
+      },
       notes: json['notes'] as String? ?? '',
       isDeleted: json['isDeleted'] as bool? ?? false,
     );
