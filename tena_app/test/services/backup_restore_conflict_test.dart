@@ -99,6 +99,27 @@ void main() {
       expect(conflicts, ['goal:same-goal', 'transaction:duplicate']);
     });
 
+    test('ignores empty budgets that restoration will not write', () {
+      const data = BackupData(
+        budgets: {
+          'global': 0,
+          'categories': {'Transport': 0},
+        },
+        transactions: [],
+        goals: [],
+      );
+
+      final conflicts = BackupService.findRestoreConflicts(
+        data,
+        transactionIds: const {},
+        budgetIds: {'global', 'Transport'},
+        goalIds: const {},
+        hasProfile: false,
+      );
+
+      expect(conflicts, isEmpty);
+    });
+
     test('allows a restore when no identifiers overlap', () {
       const data = BackupData(
         transactions: [
