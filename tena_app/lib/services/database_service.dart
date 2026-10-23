@@ -265,9 +265,6 @@ class DatabaseService {
         final unknown => throw FormatException(
             'Type de transaction inconnu "$unknown" pour ${row['id']}'),
       },
-      isDeleted: ((row['is_deleted'] as int?) ?? 0) == 1,
-    );
-  }
       notes: await CryptoService.decrypt((row['notes'] as String?) ?? ''),
       isDeleted: ((row['is_deleted'] as int?) ?? 0) == 1,
     );
