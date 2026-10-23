@@ -57,7 +57,7 @@ export function MonthlyChart({ data }: { data: { month: string; totalCents: numb
           >
             <span
               aria-hidden="true"
-              style={{ alignSelf: 'end', width: '100%', height: `${height}%`, minHeight: 6, background: 'linear-gradient(180deg, #f0d990, #9c762b)', borderRadius: '5px 5px 2px 2px' }}
+              style={{ alignSelf: 'end', width: '100%', height: `${height}%`, minHeight: 6, background: 'linear-gradient(180deg, #e8cc6a, #8a7434)', borderRadius: '5px 5px 2px 2px' }}
             />
             <span aria-hidden="true" style={{ color: '#a7a8b2', fontSize: 9 }}>{item.month}</span>
           </div>
