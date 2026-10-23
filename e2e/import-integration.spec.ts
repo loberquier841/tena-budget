@@ -15,6 +15,7 @@ async function completeOnboarding(page: import('@playwright/test').Page) {
   await page.getByText('Débutant(e) — Je commence à budgétiser').click();
   await page.getByRole('button', { name: 'Suivant →' }).click();
   await page.getByRole('checkbox').first().check({ force: true });
+  await page.getByText('Contrôler mes dépenses', { exact: false }).click();
   await expect(page.getByRole('button', { name: 'Suivant →' })).toBeEnabled();
   await page.getByRole('button', { name: 'Suivant →' }).click();
   await page.getByRole('button', { name: 'Suivant →' }).click();
@@ -23,6 +24,8 @@ async function completeOnboarding(page: import('@playwright/test').Page) {
   await page.getByRole('button', { name: 'Créer mon profil' }).click();
   await page.getByRole('button', { name: 'Accéder au tableau de bord' }).click();
   await expect(page).toHaveURL(/dashboard/);
+  await expect(page.getByRole('heading', { name: 'Alertes de budget' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Aucun objectif d’épargne' })).toHaveCount(0);
 }
 
 async function transactionCount(page: import('@playwright/test').Page) {

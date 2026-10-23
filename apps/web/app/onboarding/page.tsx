@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   createUserProfile,
+  cardsForPriorities,
   validateOnboardingAnswers,
   recommendForProfile,
   type OnboardingAnswers,
@@ -13,7 +14,6 @@ import {
   type IncomePattern,
   type BudgetExperience,
   type NotificationPreference,
-  type DashboardCardId,
 } from '@tena/core';
 import { isLocalVaultUnlocked } from '@tena/core/localVault';
 import {
@@ -364,7 +364,7 @@ export default function OnboardingPage() {
 
   if (step === 'summary' || step === 'done') {
     const completedAnswers = answers as OnboardingAnswers;
-    const cards = recomputeCards(completedAnswers.priorities);
+    const cards = cardsForPriorities(completedAnswers.priorities);
     return (
       <main style={{ padding: 24, maxWidth: 480, margin: '0 auto', background: '#fafafa', minHeight: '100vh' }}>
         <h1 style={{ fontSize: 26, marginBottom: 16 }}>{step === 'done' ? 'Profil créé !' : 'Récapitulatif avant validation'}</h1>
@@ -609,17 +609,3 @@ export default function OnboardingPage() {
   );
 }
 
-function recomputeCards(priorities: UserPriority[]): DashboardCardId[] {
-  const ordered: DashboardCardId[] = [];
-  const allCards: DashboardCardId[] = ['spending', 'goals', 'recent-transactions', 'alerts', 'forecast'];
-  const add = (...items: DashboardCardId[]) => items.forEach(item => { if (!ordered.includes(item)) ordered.push(item); });
-  for (const item of priorities) {
-    if (item === 'understand-money') add('spending', 'recent-transactions');
-    if (item === 'control-spending' || item === 'manage-debt') add('spending', 'alerts');
-    if (item === 'save') add('goals');
-    if (item === 'prepare-expenses') add('forecast', 'spending');
-    if (item === 'family-visibility') add('recent-transactions', 'goals');
-  }
-  add(...allCards);
-  return ordered;
-}

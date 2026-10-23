@@ -1,6 +1,6 @@
 
 import { describe, it, expect } from "vitest";
-import { getSpendingByCategory, getSpendingByPerson, getMonthlyEvolution, getBudgetVsSpent, getSavingsStats } from "./stats";
+import { getSpendingByCategory, getSpendingByPerson, getMonthlyEvolution, getBudgetVsSpent, getSavingsStats, getBudgetAlerts } from "./stats";
 import { comparePeriods, compareYearNvsNMinus1 } from "./history";
 import { advancedSearch } from "./searchAdvanced";
 import { prepareCategoryChart, centsToEurosDisplay } from "./charts";
@@ -110,6 +110,21 @@ describe("Cohérence budget/dépenses/restant", () => {
     const vs = getBudgetVsSpent([budget], [mayDebit, juneDebit] as any, { familyId: "fam1" });
     expect(vs[0].spentCents).toBe(2450);
     expect(vs[0].remainingCents).toBe(97550);
+  });
+});
+
+describe("Alertes du tableau de bord", () => {
+  it("signale les budgets à partir de 80 % et trie les dépassements en premier", () => {
+    const alerts = getBudgetAlerts([
+      { budgetId: "safe", budgetedCents: 10000, spentCents: 7900, remainingCents: 2100 },
+      { budgetId: "near", categoryId: "Courses", budgetedCents: 10000, spentCents: 8500, remainingCents: 1500 },
+      { budgetId: "over", categoryId: "Transport", budgetedCents: 10000, spentCents: 12000, remainingCents: -2000 },
+      { budgetId: "empty", budgetedCents: 0, spentCents: 10, remainingCents: -10 },
+    ]);
+
+    expect(alerts.map(alert => alert.budgetId)).toEqual(["over", "near"]);
+    expect(alerts[0]).toMatchObject({ usagePercent: 120, severity: "over-budget", remainingCents: -2000 });
+    expect(alerts[1]).toMatchObject({ usagePercent: 85, severity: "warning" });
   });
 });
 

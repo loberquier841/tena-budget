@@ -73,8 +73,7 @@ export const OFFER_CATALOG: readonly { tier: OfferTier; label: string; availabil
   { tier: 'enterprise', label: 'Entreprise (future)', availability: 'not-launched', focus: ['business-space', 'accounting', 'team-permissions'], priceConfigured: false, paymentVerified: false },
 ];
 const featureById = new Map(PRODUCT_CAPABILITIES.map(feature => [feature.id, feature]));
-const cards: DashboardCardId[] = ['spending', 'goals', 'recent-transactions', 'alerts', 'forecast'];
-
+const allDashboardCards: DashboardCardId[] = ['spending', 'goals', 'recent-transactions', 'alerts', 'forecast'];
 export function validateOnboardingAnswers(answers: OnboardingAnswers): void {
   if (!['personal', 'couple', 'family', 'business-later'].includes(answers.householdMode)) throw new Error('PROFILE_HOUSEHOLD_INVALID');
   if (!['regular', 'variable', 'mixed', 'prefer-not-to-say'].includes(answers.incomePattern)) throw new Error('PROFILE_INCOME_PATTERN_INVALID');
@@ -84,18 +83,30 @@ export function validateOnboardingAnswers(answers: OnboardingAnswers): void {
   if (!Array.isArray(answers.wantedFeatures) || answers.wantedFeatures.some(x => !featureById.has(x))) throw new Error('PROFILE_FEATURE_INVALID');
 }
 
-function cardsFor(priorities: UserPriority[]): DashboardCardId[] {
+export function cardsForPriorities(priorities: UserPriority[]): DashboardCardId[] {
   const ordered: DashboardCardId[] = [];
   const add = (...items: DashboardCardId[]) => items.forEach(item => { if (!ordered.includes(item)) ordered.push(item); });
   for (const item of priorities) {
     if (item === 'understand-money') add('spending', 'recent-transactions');
     if (item === 'control-spending' || item === 'manage-debt') add('spending', 'alerts');
     if (item === 'save') add('goals');
-    if (item === 'prepare-expenses') add('forecast', 'spending');
+    // La projection de trésorerie n'est pas encore intégrée au tableau de bord.
+    // Pour cette priorité, montrer les dépenses et budgets qui aident déjà à
+    // préparer les échéances, sans annoncer une prévision indisponible.
+    if (item === 'prepare-expenses') add('spending');
     if (item === 'family-visibility') add('recent-transactions', 'goals');
   }
-  add(...cards);
+  // Les cartes présentes dans le profil correspondent à de vraies priorités.
+  // Ne pas ajouter toutes les cartes ici : cela neutraliserait la personnalisation.
   return ordered;
+}
+
+/** Corrige à l'affichage les anciens profils qui avaient reçu toutes les cartes par défaut. */
+export function getProfileDashboardCards(profile: Pick<UserProfile, 'answers' | 'dashboard'>): DashboardCardId[] {
+  const selected = profile.dashboard.visibleCards;
+  const hadUnpersonalizedDefault = selected.length === allDashboardCards.length &&
+    allDashboardCards.every(card => selected.includes(card));
+  return hadUnpersonalizedDefault ? cardsForPriorities(profile.answers.priorities) : selected;
 }
 
 export function createUserProfile(answers: OnboardingAnswers, now = new Date()): UserProfile {
@@ -103,14 +114,14 @@ export function createUserProfile(answers: OnboardingAnswers, now = new Date()):
   const timestamp = now.toISOString();
   return { id: 'primary', schemaVersion: 1, createdAt: timestamp, updatedAt: timestamp, completedAt: timestamp,
     answers: { ...answers, priorities: [...new Set(answers.priorities)], wantedFeatures: [...new Set(answers.wantedFeatures)] },
-    dashboard: { visibleCards: cardsFor(answers.priorities), compact: false } };
+    dashboard: { visibleCards: cardsForPriorities(answers.priorities), compact: false } };
 }
 
 export function updateUserProfile(profile: UserProfile, patch: { answers?: OnboardingAnswers; visibleCards?: DashboardCardId[]; compact?: boolean }, now = new Date()): UserProfile {
   const answers = patch.answers ?? profile.answers;
   validateOnboardingAnswers(answers);
   const visibleCards = patch.visibleCards ?? profile.dashboard.visibleCards;
-  if (visibleCards.some(card => !cards.includes(card))) throw new Error('PROFILE_DASHBOARD_CARD_INVALID');
+  if (visibleCards.some(card => !allDashboardCards.includes(card))) throw new Error('PROFILE_DASHBOARD_CARD_INVALID');
   return { ...profile, updatedAt: now.toISOString(), completedAt: now.toISOString(),
     answers: { ...answers, priorities: [...new Set(answers.priorities)], wantedFeatures: [...new Set(answers.wantedFeatures)] },
     dashboard: { visibleCards: [...new Set(visibleCards)], compact: patch.compact ?? profile.dashboard.compact } };

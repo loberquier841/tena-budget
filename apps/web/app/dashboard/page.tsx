@@ -8,7 +8,6 @@ import {
   getLocalTransactions,
   getLocalBudgets,
   getLocalSavingGoals,
-  db,
   type LocalTransaction,
   type LocalBudget,
   type LocalSavingGoal,
@@ -19,11 +18,13 @@ import {
   getMonthlyEvolution,
   getBudgetVsSpent,
   getSavingsStats,
+  getBudgetAlerts,
   type StatsFilters,
 } from '@tena/core/analytics/stats';
 import { centsToEurosDisplay } from '@tena/core/analytics/charts';
-import { type UserProfile, type DashboardCardId } from '@tena/core';
+import { getProfileDashboardCards, type UserProfile } from '@tena/core';
 import { APP_NAME } from '@tena/shared';
+import { getLocalFamilyIds } from '@/lib/localFamilyIds';
 
 // Couleurs de marque TENΛ Budget
 const COLOR_PRIMARY = '#7C3AED';
@@ -54,24 +55,6 @@ function fmtEuros(cents: number): string {
 function fmtDate(iso: string | Date): string {
   const d = typeof iso === 'string' ? new Date(iso) : iso;
   return d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' });
-}
-
-// Détecte un familyId depuis les tables Dexie non chiffrées (familyId n'est pas dans encryptedFields)
-async function detectFamilyId(): Promise<string | undefined> {
-  try {
-    const [txs, budgs, goals] = await Promise.all([
-      db.transactions.toArray(),
-      db.budgets.toArray(),
-      db.savingGoals.toArray(),
-    ]);
-    const ids = new Set<string>();
-    for (const t of txs) if (t.familyId) ids.add(t.familyId);
-    for (const b of budgs) if (b.familyId) ids.add(b.familyId);
-    for (const g of goals) if (g.familyId) ids.add(g.familyId);
-    return ids.values().next().value;
-  } catch {
-    return undefined;
-  }
 }
 
 interface StatCardProps {
@@ -371,11 +354,7 @@ export default function DashboardView() {
   const [budgets, setBudgets] = useState<LocalBudget[]>([]);
   const [goals, setGoals] = useState<LocalSavingGoal[]>([]);
 
-  const visibleCards: DashboardCardId[] = profile?.dashboard.visibleCards ?? [
-    'spending',
-    'goals',
-    'recent-transactions',
-  ];
+  const visibleCards = profile ? getProfileDashboardCards(profile) : [];
 
   const householdMode = profile?.answers.householdMode || 'individual';
 
@@ -397,7 +376,9 @@ export default function DashboardView() {
       const userProfile = await getLocalUserProfile();
       setProfile(userProfile ?? null);
 
-      const fid = await detectFamilyId();
+      // Le service partagé crée un identifiant local stable dès qu'un profil
+      // existe, même avant la première transaction ou le premier budget.
+      const fid = (await getLocalFamilyIds())[0];
       setFamilyId(fid);
 
       if (!fid) {
@@ -633,6 +614,7 @@ export default function DashboardView() {
   }
 
   const s = stats!;
+  const budgetAlerts = getBudgetAlerts(s.budgetsWithUsage.map(({ id, ...budget }) => ({ ...budget, budgetId: id })));
   const cardsGridStyle: React.CSSProperties = {
     display: 'grid',
     gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 220px), 1fr))',
@@ -868,6 +850,38 @@ export default function DashboardView() {
               </table>
             </div>
           </div>
+        )}
+
+        {visibleCards.includes('alerts') && (
+          <section aria-label="Alertes de budget" style={{
+            background: COLOR_CARD_BG,
+            border: `1px solid ${COLOR_BORDER}`,
+            borderRadius: 12,
+            padding: 18,
+            marginBottom: 20,
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+              <h2 style={{ fontSize: 15, margin: 0, color: '#111' }}>Alertes de budget</h2>
+              <Link href="/budgets" style={{ fontSize: 12, color: COLOR_PRIMARY, textDecoration: 'none', fontWeight: 600 }}>
+                Voir les budgets →
+              </Link>
+            </div>
+            {budgetAlerts.length ? (
+              <ul style={{ display: 'grid', gap: 10, paddingLeft: 20, marginBottom: 0 }}>
+                {budgetAlerts.map((alert) => (
+                  <li key={alert.budgetId} style={{ color: alert.severity === 'over-budget' ? COLOR_ERROR : '#a16207' }}>
+                    <strong>{alert.categoryId || 'Budget global'}</strong> : {alert.usagePercent}% utilisé
+                    ({fmtEuros(alert.spentCents)} sur {fmtEuros(alert.budgetedCents)})
+                    {alert.severity === 'over-budget' ? ' — plafond dépassé' : ' — seuil de vigilance atteint'}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p style={{ color: COLOR_TEXT_MUTED, fontSize: 13, marginBottom: 0 }}>
+                Aucun budget n’a atteint 80 % de son plafond pour l’année en cours.
+              </p>
+            )}
+          </section>
         )}
 
         {/* Section Objectifs */}

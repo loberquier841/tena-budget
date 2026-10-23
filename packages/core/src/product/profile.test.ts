@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createUserProfile, recommendForProfile, updateUserProfile, validateOnboardingAnswers, type OnboardingAnswers } from './profile';
+import { cardsForPriorities, createUserProfile, getProfileDashboardCards, recommendForProfile, updateUserProfile, validateOnboardingAnswers, type OnboardingAnswers } from './profile';
 
 const answers: OnboardingAnswers = {
   householdMode: 'personal', incomePattern: 'variable', budgetExperience: 'some-habits',
@@ -13,6 +13,18 @@ describe('questionnaire profile and product recommendations', () => {
     expect(profile.schemaVersion).toBe(1);
     expect(profile.dashboard.visibleCards.slice(0, 3)).toEqual(['goals', 'spending', 'alerts']);
     expect(profile.answers.incomePattern).toBe('variable');
+  });
+
+  it('shows only cards supported by the selected priorities', () => {
+    expect(cardsForPriorities(['understand-money'])).toEqual(['spending', 'recent-transactions']);
+    expect(cardsForPriorities(['save'])).toEqual(['goals']);
+    expect(cardsForPriorities(['prepare-expenses'])).toEqual(['spending']);
+  });
+
+  it('personalizes legacy profiles that were previously saved with every card', () => {
+    const oldProfile = createUserProfile(answers);
+    const legacyProfile = { ...oldProfile, dashboard: { ...oldProfile.dashboard, visibleCards: ['spending', 'goals', 'recent-transactions', 'alerts', 'forecast'] as typeof oldProfile.dashboard.visibleCards } };
+    expect(getProfileDashboardCards(legacyProfile)).toEqual(['goals', 'spending', 'alerts']);
   });
 
   it('separates available/partial needs from mock or planned features and never claims a paid unlock', () => {

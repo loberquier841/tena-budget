@@ -119,6 +119,39 @@ export function getBudgetVsSpent(budgets: Budget[], transactions: Transaction[],
   });
 }
 
+export interface BudgetAlert {
+  budgetId: string;
+  categoryId?: string;
+  budgetedCents: number;
+  spentCents: number;
+  remainingCents: number;
+  usagePercent: number;
+  severity: 'warning' | 'over-budget';
+}
+
+/** Détecte les budgets proches du plafond ou dépassés, sans modifier les données. */
+export function getBudgetAlerts(
+  budgets: Array<{
+    budgetId: string;
+    categoryId?: string;
+    budgetedCents: number;
+    spentCents: number;
+    remainingCents: number;
+  }>,
+): BudgetAlert[] {
+  return budgets
+    .filter(budget => budget.budgetedCents > 0 && budget.spentCents * 100 >= budget.budgetedCents * 80)
+    .map(budget => ({
+      ...budget,
+      usagePercent: Math.floor((budget.spentCents * 100) / budget.budgetedCents),
+      severity: budget.spentCents > budget.budgetedCents ? 'over-budget' as const : 'warning' as const,
+    }))
+    .sort((a, b) => {
+      if (a.severity !== b.severity) return a.severity === 'over-budget' ? -1 : 1;
+      return b.usagePercent - a.usagePercent;
+    });
+}
+
 export function getSavingsStats(goals: SavingGoal[], filters: StatsFilters): { goalId: string; name: string; personId?: string; targetCents: number; currentCents: number; remainingCents: number; percentInt: number; isExceeded: boolean }[] {
   let filtered = goals.filter(g => g.familyId === filters.familyId && !g.isDeleted);
   if (filters.personId) filtered = filtered.filter(g => g.personId === filters.personId);
