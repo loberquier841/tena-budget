@@ -53,11 +53,11 @@ export function MonthlyChart({ data }: { data: { month: string; totalCents: numb
         return (
           <div
             key={item.month}
-            style={{ flex: 1, alignSelf: 'stretch', display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', alignItems: 'center', gap: 7 }}
+            style={{ flex: 1, alignSelf: 'stretch', display: 'grid', gridTemplateRows: '1fr auto', justifyItems: 'center', gap: 7 }}
           >
             <span
               aria-hidden="true"
-              style={{ width: '100%', height: `${height}%`, minHeight: 6, background: 'linear-gradient(180deg, #f0d990, #9c762b)', borderRadius: '5px 5px 2px 2px' }}
+              style={{ alignSelf: 'end', width: '100%', height: `${height}%`, minHeight: 6, background: 'linear-gradient(180deg, #f0d990, #9c762b)', borderRadius: '5px 5px 2px 2px' }}
             />
             <span aria-hidden="true" style={{ color: '#a7a8b2', fontSize: 9 }}>{item.month}</span>
           </div>
