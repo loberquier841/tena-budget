@@ -1,3 +1,4 @@
+import Image from 'next/image';
 import { MonthlyChart } from '../components/Charts';
 import styles from './landing.module.css';
 
@@ -64,7 +65,7 @@ export default function Home() {
       <div className={styles.wrap}>
         <header className={styles.nav}>
           <a className={styles.brand} href="/" aria-label="TENΛ Budget, accueil">
-            <span className={styles.mark} aria-hidden="true">Λ</span>
+            <Image className={styles.mark} src="/icon-192.png" alt="" width={38} height={38} />
             <span>TENΛ <b>BUDGET</b></span>
           </a>
           <nav className={styles.navLinks} aria-label="Navigation principale">
@@ -209,7 +210,7 @@ export default function Home() {
 
         <footer className={styles.footer}>
           <a className={styles.brand} href="/" aria-label="TENΛ Budget, accueil">
-            <span className={styles.mark} aria-hidden="true">Λ</span>
+            <Image className={styles.mark} src="/icon-192.png" alt="" width={38} height={38} />
             <span>TENΛ <b>BUDGET</b></span>
           </a>
           <span>Finance personnelle · Local-first</span>
