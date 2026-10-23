@@ -357,6 +357,50 @@ class BackupService {
   // │ 5. RESTAURATION                                                     │
   // └─────────────────────────────────────────────────────────────────────┘
 
+  /// Detects IDs that would overwrite existing data during a restore.
+  ///
+  /// Exposed for focused regression tests; restore uses this check before its
+  /// first write. Duplicate identifiers inside the backup are conflicts too.
+  static List<String> findRestoreConflicts(
+    BackupData data, {
+    required Set<String> transactionIds,
+    required Set<String> budgetIds,
+    required Set<String> goalIds,
+    required bool hasProfile,
+  }) {
+    final conflicts = <String>{};
+    final seenTransactionIds = <String>{};
+    for (final transaction in data.transactions) {
+      final id = transaction['id'] as String?;
+      if (id == null || id.isEmpty) continue;
+      if (transactionIds.contains(id) || !seenTransactionIds.add(id)) {
+        conflicts.add('transaction:' + id);
+      }
+    }
+
+    final budgetData = data.budgets;
+    if (budgetData['global'] != null && budgetIds.contains('global')) {
+      conflicts.add('budget:global');
+    }
+    final categories = budgetData['categories'] as Map? ?? const {};
+    for (final category in categories.keys) {
+      final id = category.toString();
+      if (budgetIds.contains(id)) conflicts.add('budget:' + id);
+    }
+
+    final seenGoalIds = <String>{};
+    for (final goal in data.goals) {
+      final id = goal['id'] as String?;
+      if (id == null || id.isEmpty) continue;
+      if (goalIds.contains(id) || !seenGoalIds.add(id)) {
+        conflicts.add('goal:' + id);
+      }
+    }
+
+    if (data.profile != null && hasProfile) conflicts.add('profile');
+    return conflicts.toList()..sort();
+  }
+
   /// Restaure les données depuis un fichier de sauvegarde validé.
   ///
   /// Le fichier est d'abord validé ([validateBackupFile]). Si la validation
@@ -367,7 +411,10 @@ class BackupService {
   /// L'écriture est transactionnelle : si une étape échoue, les données
   /// partiellement écrites restent cohérentes (aucune suppression logique
   /// n'est effectuée en cascade).
-  static Future<void> restoreFromFile(File file) async {
+  static Future<void> restoreFromFile(
+    File file, {
+    bool replaceExisting = false,
+  }) async {
     // Validation avant toute modification
     final result = await validateBackupFile(file);
     if (!result.isValid || result.summary == null) {
@@ -379,6 +426,30 @@ class BackupService {
 
     final summary = result.summary!;
     final data = summary.data;
+
+    if (!replaceExisting) {
+      final database = DatabaseService.instance;
+      final transactions = await database.getTransactions(includeDeleted: true);
+      final budgets = await database.getBudgets(includeDeleted: true);
+      final goals = await database.getGoals(includeDeleted: true);
+      final hasProfile = await database.getUserProfilePayload() != null;
+
+      final conflicts = findRestoreConflicts(
+        data,
+        transactionIds: transactions.map((entry) => entry.id).toSet(),
+        budgetIds: budgets.map((entry) => entry.id).toSet(),
+        goalIds: goals.map((entry) => entry.id).toSet(),
+        hasProfile: hasProfile,
+      );
+      if (conflicts.isNotEmpty) {
+        throw BackupException(
+          'RESTORE_CONFLICT',
+          'Restauration annulée : certains éléments existent déjà '
+          '(' + conflicts.join(', ') + '). Aucune donnée n’a été modifiée. '
+          'Confirmez explicitement le remplacement avant de réessayer.',
+        );
+      }
+    }
 
     // Restauration des transactions
     for (final txJson in data.transactions) {
