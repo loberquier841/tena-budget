@@ -1,3 +1,4 @@
+import { MonthlyChart } from '../components/Charts';
 import styles from './landing.module.css';
 
 const features = [
@@ -116,13 +117,14 @@ export default function Home() {
             </div>
             <div className={styles.chartBox}>
               <div className={styles.chartTitle}><span>Ton rythme</span><span>Illustration</span></div>
-              <div className={styles.chart} aria-hidden="true">
-                <span style={{ height: '32%' }} /><span style={{ height: '48%' }} />
-                <span style={{ height: '40%' }} /><span style={{ height: '68%' }} />
-                <span style={{ height: '53%' }} /><span style={{ height: '82%' }} />
-                <span style={{ height: '62%' }} />
-              </div>
-              <div className={styles.chartCaption}><span>Début du mois</span><span>Fin du mois</span></div>
+              <MonthlyChart
+                data={[
+                  { month: 'Sem. 1', totalCents: 28000 },
+                  { month: 'Sem. 2', totalCents: 39000 },
+                  { month: 'Sem. 3', totalCents: 33000 },
+                  { month: 'Sem. 4', totalCents: 46000 },
+                ]}
+              />
             </div>
             <div className={styles.previewFooter}><span className={styles.lock} aria-hidden="true">⌑</span><span>Aperçu de design · aucune donnée réelle</span></div>
           </div>
