@@ -33,11 +33,15 @@ export function CategoryChart({ data }: { data: { name: string; totalCents: numb
 
 export function MonthlyChart({ data }: { data: { month: string; totalCents: number }[] }) {
   const max = Math.max(0, ...data.map((item) => item.totalCents));
+  const currency = new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' });
+  const accessibleSummary = data.length
+    ? data.map((item) => `${item.month} : ${currency.format(item.totalCents / 100)}`).join('; ')
+    : 'Aucune donnée';
 
   return (
     <div
       role="img"
-      aria-label="Évolution mensuelle des dépenses"
+      aria-label={`Évolution mensuelle des dépenses. ${accessibleSummary}`}
       style={{
         display: 'flex',
         alignItems: 'flex-end',
