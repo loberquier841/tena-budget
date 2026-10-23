@@ -358,6 +358,10 @@ class _TransactionsPageState extends State<TransactionsPage> {
                       value: TransactionType.income,
                       child: Text('Revenus'),
                     ),
+                    PopupMenuItem(
+                      value: TransactionType.transfer,
+                      child: Text('Transferts'),
+                    ),
                   ],
                   child: const IconButton(
                     onPressed: null,
@@ -414,14 +418,18 @@ class _TransactionsPageState extends State<TransactionsPage> {
 
                         final isIncome =
                             transaction.type == TransactionType.income;
+                        final isTransfer =
+                            transaction.type == TransactionType.transfer;
 
                         return Card(
                           child: ListTile(
                             leading: CircleAvatar(
                               child: Icon(
-                                isIncome
-                                    ? Icons.arrow_downward
-                                    : Icons.arrow_upward,
+                                isTransfer
+                                    ? Icons.swap_horiz
+                                    : isIncome
+                                        ? Icons.arrow_downward
+                                        : Icons.arrow_upward,
                               ),
                             ),
                             title: Text(
@@ -446,13 +454,15 @@ class _TransactionsPageState extends State<TransactionsPage> {
                               mainAxisSize: MainAxisSize.min,
                               children: [
                                 Text(
-                                  '${isIncome ? '+' : '-'}'
+                                  '${isTransfer ? '↔ ' : isIncome ? '+' : '-'}'
                                   '${_money(transaction.amount)}',
                                   style: TextStyle(
                                     fontWeight: FontWeight.bold,
-                                    color: isIncome
-                                        ? Colors.greenAccent
-                                        : Colors.redAccent,
+                                    color: isTransfer
+                                        ? Theme.of(context).colorScheme.primary
+                                        : isIncome
+                                            ? Colors.greenAccent
+                                            : Colors.redAccent,
                                   ),
                                 ),
                                 const SizedBox(width: 8),
@@ -667,6 +677,11 @@ class _TransactionDialogState extends State<_TransactionDialog> {
                     value: TransactionType.income,
                     label: Text('Revenu'),
                     icon: Icon(Icons.arrow_downward),
+                  ),
+                  ButtonSegment(
+                    value: TransactionType.transfer,
+                    label: Text('Transfert'),
+                    icon: Icon(Icons.swap_horiz),
                   ),
                 ],
                 selected: {_type},
