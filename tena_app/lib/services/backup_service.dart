@@ -408,9 +408,11 @@ class BackupService {
   /// levée.
   ///
   /// Les données existantes ne sont jamais supprimées avant validation.
-  /// L'écriture est transactionnelle : si une étape échoue, les données
-  /// partiellement écrites restent cohérentes (aucune suppression logique
-  /// n'est effectuée en cascade).
+  /// Par défaut, aucun élément existant n'est remplacé : les conflits sont
+  /// détectés avant la première écriture. Le remplacement doit être demandé
+  /// explicitement avec [replaceExisting]. Les écritures sur plusieurs
+  /// stockages ne sont pas atomiques ; une panne inattendue peut donc laisser
+  /// les écritures précédentes appliquées.
   static Future<void> restoreFromFile(
     File file, {
     bool replaceExisting = false,
@@ -426,6 +428,23 @@ class BackupService {
 
     final summary = result.summary!;
     final data = summary.data;
+
+    // Même un remplacement explicite ne permet pas des doublons ambigus dans
+    // le fichier de sauvegarde lui-même.
+    final duplicateIds = findRestoreConflicts(
+      data,
+      transactionIds: const {},
+      budgetIds: const {},
+      goalIds: const {},
+      hasProfile: false,
+    );
+    if (duplicateIds.isNotEmpty) {
+      throw BackupException(
+        'RESTORE_CONFLICT',
+        'Restauration annulée : la sauvegarde contient des identifiants '
+        'en double (' + duplicateIds.join(', ') + ').',
+      );
+    }
 
     if (!replaceExisting) {
       final database = DatabaseService.instance;
