@@ -1,6 +1,6 @@
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { MonthlyChart } from '../components/Charts';
 
@@ -49,7 +49,16 @@ describe('TENΛ Budget landing page', () => {
     expect(markup).toContain('height:6%');
   });
 
-  it('uses the same dark and gold brand colors as the website', () => {
+  it('ships the app icons referenced by the web manifest', () => {
+    expect(existsSync(new URL('../public/icon-192.png', import.meta.url))).toBe(true);
+    expect(existsSync(new URL('../public/icon-512.png', import.meta.url))).toBe(true);
+    expect(page).toContain('src="/icon-192.png"');
+  });
+
+  it('uses the same dark and gold palette as the Flutter app', () => {
+    expect(styles).toContain('--bg: #09090b');
+    expect(styles).toContain('--gold: #d4af37');
+    expect(styles).toContain('--gold-light: #e8cc6a');
     expect(manifest.background_color).toBe('#09090b');
     expect(manifest.theme_color).toBe('#d4af37');
   });
