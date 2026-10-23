@@ -4,8 +4,8 @@
   "description": "Budget personnel local et confidentiel, conçu pour fonctionner hors ligne",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#08090d",
-  "theme_color": "#e7c979",
+  "background_color": "#09090b",
+  "theme_color": "#d4af37",
   "icons": [
     {
       "src": "/icon-192.png",
