@@ -20,7 +20,6 @@ import 'dart:typed_data';
 
 import 'package:crypto/crypto.dart';
 import 'package:path/path.dart' as path;
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 import '../models/backup_models.dart';
@@ -115,25 +114,22 @@ class BackupService {
     };
   }
 
-  /// Récupère les budgets depuis SharedPreferences.
+  /// Récupère tous les budgets actifs depuis SQLite, leur source actuelle.
   static Future<Map<String, dynamic>> _collectBudgets() async {
-    final prefs = await SharedPreferences.getInstance();
-    final global = BudgetService.getGlobalBudget();
+    final budgets = await DatabaseService.instance.getBudgets();
+    double? global;
     final categories = <String, dynamic>{};
 
-    final keys = prefs.getKeys().where((k) =>
-        k.startsWith('tena_budget_category_'));
-
-    for (final key in keys) {
-      final categoryName = key.substring('tena_budget_category_'.length);
-      final amount = prefs.getDouble(key) ?? 0;
-      if (amount > 0) {
-        categories[categoryName] = amount;
+    for (final budget in budgets) {
+      if (budget.category == null && budget.id == 'global') {
+        global = budget.amountCents;
+      } else if (budget.category != null) {
+        categories[budget.category!] = budget.amountCents;
       }
     }
 
     return {
-      'global': await global,
+      'global': global ?? 0,
       'categories': categories,
     };
   }
