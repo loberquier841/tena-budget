@@ -13,6 +13,7 @@ const manifest = JSON.parse(
 describe('TENΛ Budget landing page', () => {
   it('keeps the onboarding path and privacy information visible', () => {
     expect(page).toContain('href="/onboarding"');
+    expect(page).toContain('src="/icon-192.png"');
     expect(page).toContain('Où sont enregistrées mes réponses ?');
     expect(page).toContain('Le questionnaire crée un profil dans le stockage local');
     expect(page).toContain('La connexion bancaire réelle n’est pas activée.');
