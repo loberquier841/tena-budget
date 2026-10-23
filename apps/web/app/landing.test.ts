@@ -21,10 +21,10 @@ describe('TENΛ Budget landing page', () => {
 
   it('provides a CSS module selector for every class used by the page', () => {
     const usedClasses = new Set(
-      [...page.matchAll(/styles\.([A-Za-z_][A-Za-z0-9_]*)/g)].map((match) => match[1]),
+      [...page.matchAll(/styles\\.([A-Za-z_][A-Za-z0-9_]*)/g)].map((match) => match[1]),
     );
     const definedClasses = new Set(
-      [...styles.matchAll(/\.([A-Za-z_][A-Za-z0-9_-]*)/g)].map((match) => match[1]),
+      [...styles.matchAll(/\\.([A-Za-z_][A-Za-z0-9_-]*)/g)].map((match) => match[1]),
     );
 
     expect(usedClasses.size).toBeGreaterThan(0);
@@ -34,7 +34,7 @@ describe('TENΛ Budget landing page', () => {
     }
   });
 
-  it('renders the existing monthly chart accessibly and handles zero-value weeks', () => {
+  it('announces chart periods and euro values to screen readers', () => {
     const markup = renderToStaticMarkup(
       createElement(MonthlyChart, {
         data: [
@@ -44,9 +44,16 @@ describe('TENΛ Budget landing page', () => {
       }),
     );
 
-    expect(markup).toContain('aria-label="Évolution mensuelle des dépenses"');
-    expect(markup).toContain('Sem. 1');
+    expect(markup).toContain('role="img"');
+    expect(markup).toContain('aria-label="Évolution mensuelle des dépenses. Sem. 1 : 280,00');
+    expect(markup).toContain('Sem. 2 : 0,00');
     expect(markup).toContain('height:6%');
+  });
+
+  it('explains when the chart has no data', () => {
+    const markup = renderToStaticMarkup(createElement(MonthlyChart, { data: [] }));
+
+    expect(markup).toContain('Aucune donnée');
   });
 
   it('ships the app icons referenced by the web manifest', () => {
