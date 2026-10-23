@@ -2,10 +2,15 @@ import { ResponsiveNav } from '@/components/ResponsiveNav';
 
 export const metadata = {
   title: 'TENΛ Budget — Ton budget. Tes choix. Ta liberté.',
-  description: 'Gère ton budget avec TENΛ Budget : une approche gratuite, locale et pensée pour garder tes données sous ton contrôle.',
+  description:
+    'Gère ton budget avec TENΛ Budget : une approche gratuite, locale et pensée pour garder tes données sous ton contrôle.',
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   return (
     <html lang="fr">
       <head>
@@ -13,13 +18,15 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <meta name="theme-color" content="#08090d" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
       </head>
-      <body style={{ margin: 0, fontFamily: 'system-ui, -apple-system, sans-serif', background: '#08090d' }}>
+      <body
+        style={{
+          margin: 0,
+          fontFamily: 'system-ui, -apple-system, sans-serif',
+          background: '#08090d',
+        }}
+      >
         <ResponsiveNav />
-        {children}        <style>{`
-          @media (max-width: 768px) {
-            .mobile-menu-btn { display: block !important; }
-          }
-        `}</style>
+        {children}
       </body>
     </html>
   );
