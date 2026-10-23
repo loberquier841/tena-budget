@@ -49,7 +49,7 @@ describe('TENΛ Budget landing page', () => {
   });
 
   it('uses the same dark and gold brand colors as the website', () => {
-    expect(manifest.background_color).toBe('#08090d');
-    expect(manifest.theme_color).toBe('#e7c979');
+    expect(manifest.background_color).toBe('#09090b');
+    expect(manifest.theme_color).toBe('#d4af37');
   });
 });
