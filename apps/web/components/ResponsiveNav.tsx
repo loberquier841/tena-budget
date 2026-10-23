@@ -23,6 +23,9 @@ export function ResponsiveNav() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const pathname = usePathname();
 
+  // La page vitrine reste indépendante de la navigation de l'application.
+  if (pathname === '/') return null;
+
   return (
     <>
       {/* Bouton mobile */}

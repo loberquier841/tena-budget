@@ -23,7 +23,7 @@ export default function Home() {
     <header className="nav"><div className="brand"><span className="mark">Λ</span><span>TENΛ BUDGET</span></div><span className="pill">GRATUIT · LOCAL-FIRST</span></header>
     <section className="hero"><div><div className="eyebrow">Reprends la main sur ton argent</div><h1>Ton budget.<br/><span>Tes choix.</span><br/>Ta liberté.</h1>
       <p className="lead">Une façon plus claire de suivre tes dépenses, préparer tes projets et comprendre où va ton argent — avec une priorité : tes données restent sous ton contrôle.</p>
-      <div className="actions"><a className="btn primary" href="/dashboard">Découvrir l’application →</a><a className="btn secondary" href="#fonctionnalites">Voir les fonctionnalités</a></div>
+      <div className="actions"><a className="btn primary" href="/onboarding">Commencer gratuitement →</a><a className="btn secondary" href="#fonctionnalites">Voir les fonctionnalités</a></div>
       <p className="note">La gestion financière de base vise un fonctionnement local et hors connexion. Aucune connexion bancaire n’est activée par cette page.</p></div>
       <div className="preview" aria-label="Aperçu illustratif du tableau de bord"><div className="ptop"><span>APERÇU DU TABLEAU DE BORD</span><span>Λ</span></div><div className="ptitle">Vue d’ensemble</div><div className="balance">Maîtrise du budget <small>aperçu visuel</small></div>
       <div className="bars" aria-hidden="true"><span className="bar" style={{height:'36%'}}/><span className="bar" style={{height:'57%'}}/><span className="bar" style={{height:'43%'}}/><span className="bar" style={{height:'76%'}}/><span className="bar" style={{height:'53%'}}/><span className="bar" style={{height:'91%'}}/><span className="bar" style={{height:'66%'}}/></div>
@@ -38,7 +38,7 @@ export default function Home() {
       <article className="card"><div className="ico">⌑</div><h3>Hors connexion</h3><p>L’objectif est de gérer ton budget sans dépendre d’un serveur en permanence.</p></article></div></section>
     <section className="section"><div className="eyebrow">Nos principes</div><h2>Gratuit pour gérer ton budget. Conçu pour te respecter.</h2><div className="principles">
       <div className="principle"><strong>Pas de serveur obligatoire</strong><br/>pour le suivi budgétaire local de base.</div><div className="principle"><strong>Pas de banque simulée</strong><br/>les connexions bancaires réelles ne sont pas présentées comme actives.</div><div className="principle"><strong>Pas de promesse inventée</strong><br/>les fonctions en cours de construction sont signalées comme telles.</div></div></section>
-    <section className="section"><div className="cta"><div><h2>Prêt à faire le point ?</h2><p>Découvre l’application et ses fonctions disponibles aujourd’hui.</p></div><a className="btn primary" href="/dashboard">Ouvrir TENΛ Budget →</a></div></section>
+    <section className="section"><div className="cta"><div><h2>Prêt à faire le point ?</h2><p>Découvre l’application et ses fonctions disponibles aujourd’hui.</p></div><a className="btn primary" href="/onboarding">Créer mon espace gratuitement →</a></div></section>
     <footer className="footer"><span>© {new Date().getFullYear()} TENΛ Budget</span><span>Finance personnelle · Local-first · <a href="#fonctionnalites">Fonctionnalités</a></span></footer>
   </div></main>;
 }
