@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../models/transaction.dart';
 import '../services/database_service.dart';
@@ -94,6 +95,79 @@ class _TransactionsPageState extends State<TransactionsPage> {
 
   String _money(double value) {
     return '${value.toStringAsFixed(2).replaceAll('.', ',')} €';
+  }
+
+  Future<void> _showExportImportMenu() async {
+    final choice = await showModalBottomSheet<String>(
+      context: context,
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.download),
+              title: const Text('Exporter CSV'),
+              subtitle: const Text('Télécharger toutes les transactions au format CSV'),
+              onTap: () {
+                Navigator.pop(context, 'export');
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.upload),
+              title: const Text('Importer CSV'),
+              subtitle: const Text('Importer des transactions depuis un fichier CSV'),
+              onTap: () {
+                Navigator.pop(context, 'import');
+              },
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+
+    if (choice == 'export') {
+      await _exportCsv();
+    } else if (choice == 'import') {
+      await _navigateToImport();
+    }
+  }
+
+  Future<void> _exportCsv() async {
+    try {
+      final csvData = await _database.exportTransactionsToCsv(includeDeleted: _showDeleted);
+      if (!mounted) return;
+
+      // Copier dans le presse-papiers
+      await Clipboard.setData(ClipboardData(text: csvData));
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('CSV généré (${csvData.length} caractères) — Copié dans le presse-papiers'),
+          duration: const Duration(seconds: 4),
+          action: SnackBarAction(
+            label: 'OK',
+            onPressed: () {},
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Erreur export : $e')),
+      );
+    }
+  }
+
+  Future<void> _navigateToImport() async {
+    final result = await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const ImportCsvPage()),
+    );
+    if (result == true) {
+      await _loadTransactions();
+    }
   }
 
   Future<void> _addTransaction() async {
@@ -265,6 +339,12 @@ class _TransactionsPageState extends State<TransactionsPage> {
     final visibleTransactions = _filteredTransactions;
 
     return Scaffold(
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: _showExportImportMenu,
+        icon: const Icon(Icons.import_export),
+        label: const Text('Export / Import'),
+        tooltip: 'Exporter ou importer des transactions (CSV)',
+      ),
       body: Padding(
         padding: const EdgeInsets.all(24),
         child: Column(
