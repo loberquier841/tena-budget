@@ -16,16 +16,17 @@ describe('TENΛ Budget landing page', () => {
   });
 
   it('provides a CSS module selector for every class used by the page', () => {
-    const classes = [...page.matchAll(/styles\.([A-Za-z_][A-Za-z0-9_]*)/g)].map(
-      (match) => match[1],
+    const usedClasses = new Set(
+      [...page.matchAll(/styles\.([A-Za-z_][A-Za-z0-9_]*)/g)].map((match) => match[1]),
+    );
+    const definedClasses = new Set(
+      [...styles.matchAll(/\.([A-Za-z_][A-Za-z0-9_-]*)/g)].map((match) => match[1]),
     );
 
-    expect(classes.length).toBeGreaterThan(0);
+    expect(usedClasses.size).toBeGreaterThan(0);
 
-    for (const className of new Set(classes)) {
-      expect(styles, `Missing CSS selector for styles.${className}`).toMatch(
-        new RegExp(`\\\\.${className}(?![A-Za-z0-9_-])`),
-      );
+    for (const className of usedClasses) {
+      expect(definedClasses, `Missing CSS selector for styles.${className}`).toContain(className);
     }
   });
 
