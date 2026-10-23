@@ -1,8 +1,44 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:sqflite_common_ffi/sqflite_ffi.dart';
+import 'package:tena_budget/services/crypto_service.dart';
+import 'package:tena_budget/services/database_service.dart';
 import 'package:tena_budget/models/backup_models.dart';
 import 'package:tena_budget/services/backup_service.dart';
 
+class _MemoryKeyStore implements CryptoService.SecretKeyStore {
+  String? value;
+
+  @override
+  Future<String?> read() async => value;
+
+  @override
+  Future<void> write(String keyBase64) async {
+    value = keyBase64;
+  }
+
+  @override
+  Future<void> delete() async {
+    value = null;
+  }
+}
+
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+  sqfliteFfiInit();
+  databaseFactory = databaseFactoryFfi;
+  CryptoService.useKeyStore(_MemoryKeyStore());
+
+  test('includes current SQLite category budgets in a backup', () async {
+    final category = 'backup-test-'
+        + DateTime.now().microsecondsSinceEpoch.toString();
+    await DatabaseService.instance.setCategoryBudget(category, 321);
+
+    final backup = await BackupService.collectData();
+    final categories = backup.budgets['categories'] as Map<String, dynamic>;
+
+    expect(categories[category], 321);
+  });
+
   group('Backup restore conflict detection', () {
     test('reports existing transactions, budgets, goals and profile', () {
       const data = BackupData(
