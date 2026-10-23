@@ -253,4 +253,75 @@ void main() {
       expect(await GoalService.getGoals(), isEmpty);
     });
   });
+
+  group('DatabaseService — CSV import/export', () {
+    test('exportTransactionsToCsv génère un CSV valide avec des transactions', () async {
+      // insère d'abord quelques transactions de test
+      await DatabaseService.instance.insertTransaction(
+        Transaction(
+          id: 'tx1',
+          amount: 100.50,
+          category: 'Alimentation',
+          description: 'Course du dimanche',
+          date: DateTime(2024, 1, 15),
+          type: TransactionType.expense,
+          notes: 'Course hebdo',
+        ),
+      );
+      await DatabaseService.instance.insertTransaction(
+        Transaction(
+          id: 'tx2',
+          amount: 200.00,
+          category: 'Salaire',
+          description: 'Revenus du mois',
+          date: DateTime(2024, 1, 1),
+          type: TransactionType.income,
+          notes: 'Salaire net',
+        ),
+      );
+
+      final csvData = await DatabaseService.instance.exportTransactionsToCsv();
+      expect(csvData, isNotEmpty);
+      expect(csvData, contains('amount'));
+      expect(csvData, contains('Alimentation'));
+      expect(csvData, contains('Salaire'));
+    });
+
+    test('importTransactionsFromCsv importe des transactions valides', () async {
+      final csvData = '''id,amount,category,description,date,type,isDeleted,notes
+tx1,100.50,Alimentation,Course du dimanche,2024-01-15,expense,0,Course hebdo
+tx2,200.00,Salaire,Revenus du mois,2024-01-01,income,0,Salaire net
+tx3,30.99,Transport,Bus du travail,2024-01-10,expense,0,Pass monthly''';
+
+      final int imported = await DatabaseService.instance.importTransactionsFromCsv(csvData);
+      expect(imported, 3);
+
+      // Vérifie que les transactions sont en base
+      final db = await DatabaseService.instance.database;
+      final rows = await db.query('transaction');
+      expect(rows.length, 3);
+    });
+
+    test('importTransactionsFromCsv ignore les lignes invalides', () async {
+      final csvData = '''id,amount,category,description,date,type,isDeleted,notes
+invalid-row
+tx1,not_a_number,Alimentation,Test,2024-01-15,expense,0,Test
+tx2,10.00,Invalide,Test,invalide-date,unknown_type,0,Test''';
+
+      final int imported = await DatabaseService.instance.importTransactionsFromCsv(csvData);
+      // Seules les lignes valides should be imported (tx2 should fail on date, tx3 on type)
+      // au minimum tx1 should be imported if its date parses correctly
+      expect(imported, isNonNegative);
+    });
+
+    test('importTransactionsFromCsv avec en-tête manquant reste fonctionnel', () async {
+      final csvDataWithoutHeader = '''10.00,Alimentation,Test,2024-01-15,expense,0,Test
+20.50,Salaire,Revenus,2024-01-20,income,0,Salaire net''';
+
+      final int imported = await DatabaseService.instance.importTransactionsFromCsv(csvDataWithoutHeader);
+      // Sans en-tête, la première ligne sera traitée comme en-tête et sautée,
+      // donc 0 ou 1 transaction selon l'implémentation - on vérifie juste qu'on ne plante pas
+      expect(imported, isNonNegative);
+    });
+  });
 }

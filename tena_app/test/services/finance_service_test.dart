@@ -420,5 +420,69 @@ void main() {
       expect(summary.expenses, 700);
       expect(summary.allTransactions.length, 3);
     });
+
+    group('UserProfile fromJson validation', () {
+      test('throw FormatException if priorities is empty', () async {
+        final json = {
+          'id': 'primary',
+          'schemaVersion': 1,
+          'createdAt': '2026-01-01',
+          'updatedAt': '2026-01-01',
+          'completedAt': '2026-01-01',
+          'answers': {
+            'priorities': [],
+            'householdMode': 'personal',
+            'incomePattern': 'regular',
+            'budgetExperience': 'starting',
+            'wantedFeatures': ['transactions'],
+            'notificationPreference': 'balanced',
+          },
+          'dashboard': {'visibleCards': ['goals', 'spending'], 'compact': false},
+        };
+        expect(() => UserProfile.fromJson(json), throwsA(isA<FormatException>()));
+      });
+
+      test('throw FormatException if schemaVersion is not 1', () async {
+        final json = {
+          'id': 'primary',
+          'schemaVersion': 2,
+          'createdAt': '2026-01-01',
+          'updatedAt': '2026-01-01',
+          'completedAt': '2026-01-01',
+          'answers': {
+            'priorities': ['save'],
+            'householdMode': 'personal',
+            'incomePattern': 'regular',
+            'budgetExperience': 'starting',
+            'wantedFeatures': ['transactions'],
+            'notificationPreference': 'balanced',
+          },
+          'dashboard': {'visibleCards': ['goals', 'spending'], 'compact': false},
+        };
+        expect(() => UserProfile.fromJson(json), throwsA(isA<FormatException>()));
+      });
+
+      test('accept valid UserProfile JSON', () async {
+        final json = {
+          'id': 'primary',
+          'schemaVersion': 1,
+          'createdAt': '2026-01-01',
+          'updatedAt': '2026-01-01',
+          'completedAt': '2026-01-01',
+          'answers': {
+            'priorities': ['save'],
+            'householdMode': 'personal',
+            'incomePattern': 'regular',
+            'budgetExperience': 'starting',
+            'wantedFeatures': ['transactions'],
+            'notificationPreference': 'balanced',
+          },
+          'dashboard': {'visibleCards': ['goals', 'spending'], 'compact': false},
+        };
+        final profile = UserProfile.fromJson(json);
+        expect(profile.schemaVersion, 1);
+        expect(profile.answers['priorities'], ['save']);
+      });
+    });
   });
 }

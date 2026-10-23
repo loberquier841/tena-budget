@@ -485,6 +485,104 @@ class _TransactionsPageState extends State<TransactionsPage> {
   }
 }
 
+void _showExportImportMenu() {
+  showModalBottomSheet(
+    context: context,
+    builder: (_) => Padding(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Text(
+            'Export / Import CSV',
+            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 20),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: [
+              Expanded(
+                child: FilledButton(
+                  onPressed: _exportTransactions,
+                  child: const Text('Exporter'),
+                  icon: const Icon(Icons.download),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: FilledButton(
+                  onPressed: _importTransactions,
+                  child: const Text('Importer'),
+                  icon: const Icon(Icons.upload),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+          const Text(
+            'Format CSV colonnes: id, amount, category, description, date (yyyy-MM-dd), type (income/expense), isDeleted, notes',
+            style: TextStyle(fontSize: 12, color: Colors.grey),
+            textAlign: TextAlign.center,
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
+Future<void> _exportTransactions() async {
+  final csvData = await _database.exportTransactionsToCsv();
+  // Write to a simple location accessible for demo purposes
+  final String filePath = '/tena_transactions_${DateTime.now().millisecondsSinceEpoch}.csv';
+  // Note: In a full app, use path_provider for proper platform-specific paths
+  // For now, we just verify the CSV can be generated
+  if (csvData.isNotEmpty) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('CSV généré avec ${csvData.length} caractères - enregistrement manuel requis')),
+    );
+  } else {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text'Aucune transaction à exporter')),
+  );
+}
+
+Future<void> _importTransactions() async {
+  await showDialog(
+    context: context,
+    builder: (_) => AlertDialog(
+      title: const Text('Importer des transactions'),
+      content: const Text(
+        'Sélectionnez un fichier CSV exporté depuis TENΛ Budget.',
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Annuler'),
+        ),
+        TextButton(
+          onPressed: () {
+            Navigator.pop(context);
+            _importSampleCsv();
+          },
+          child: const Text('Essayer un exemple'),
+        ),
+      ],
+    ),
+  );
+}
+
+Future<void> _importSampleCsv() async {
+  final csvData = '''id,amount,category,description,date,type,isDeleted,notes
+tx1,100.50,Alimentation,Course du dimanche,2024-01-15,expense,0,Course hebdo
+tx2,200.00,Salaire,Revenus du mois,2024-01-01,income,0,Salaire net
+tx3,30.99,Transport,Bus du travail,2024-01-10,expense,0,Pass monthly''';
+  final int imported = await _database.importTransactionsFromCsv(csvData);
+  _loadTransactions();
+  ScaffoldMessenger.of(context).showSnackBar(
+    SnackBar(content: Text('$imported transactions importées')),
+  );
+}
+
 class _SummaryCard extends StatelessWidget {
   final String title;
   final String value;
@@ -786,6 +884,12 @@ class _TransactionDialogState extends State<_TransactionDialog> {
           child: Text(_editing ? 'Enregistrer' : 'Ajouter'),
         ),
       ],
+      floatingActionButton: FloatingActionButton(
+        onPressed: _showExportImportMenu,
+        tooltip: 'Export/Import',
+        child: const Icon(Icons.upload_file),
+      ),
+      floatingActionButtonLocation: FloatingActionButton.endFloat,
     );
   }
 }

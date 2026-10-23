@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:csv';
 
 import 'package:path/path.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
@@ -613,22 +614,132 @@ class DatabaseService {
     final db = await database;
 
     await db.delete('goals', where: 'id = ?', whereArgs: [id]);
+  
+
+  /// Exporte toutes les transactions en format CSV.
+  /// Le CSV résultant peut être copié, partagé ou sauvegardé manuellement.
+  /// Format des colonnes : id, amount (avec point), category, description, date (yyyy-MM-dd), type (income/expense), isDeleted, notes
+  String exportTransactionsToCsv() async {
+    final db = await database;
+    final rows = await db.query('transaction', orderBy: 'date ASC');
+    
+    final csvData = List<List<String>>();
+    csvData.add(['id', 'amount', 'category', 'description', 'date', 'type', 'isDeleted', 'notes']);
+    
+    for final row in rows {
+      csvData.add([
+        row['id'],
+        row['amount'].toString(),
+        row['category'] ?? '',
+        row['description'] ?? '',
+        row['date'] ?? '',
+        row['type'] ?? '',
+        row['isDeleted'] ? '1' : '0',
+        row['notes'] ?? '',
+      ]);
+    }
+    
+    return const ListToCsvConverter().convert(csvData);
   }
 
-  /// Liste des objectifs non supprimés.
-  Future<List<GoalEntry>> getGoals({bool includeDeleted = false}) async {
+  /// Exporte toutes les transactions en format CSV vers un fichier accessible.
+  /// Note: Sur mobile/web, l'utilisateur doit choisir l'emplacement de sauvegarde.
+  /// Le fichier CSV contient toutes les transactions au format standard.
+  Future<String> exportTransactionsToFile() async {
     final db = await database;
-
-    final rows = await db.query(
-      'goals',
-      where: includeDeleted ? null : 'is_deleted = 0',
-      orderBy: 'updated_at DESC',
-    );
-
-    final goals = <GoalEntry>[];
-    for (final row in rows) {
-      goals.add(await _goalFromRow(row));
+    final rows = await db.query('transaction', orderBy: 'date ASC');
+    
+    final csvData = List<List<String>>();
+    csvData.add(['id', 'amount', 'category', 'description', 'date', 'type', 'isDeleted', 'notes']);
+    
+    for final row in rows {
+      csvData.add([
+        row['id'],
+        row['amount'].toString(),
+        row['category'] ?? '',
+        row['description'] ?? '',
+        row['date'] ?? '',
+        row['type'] ?? '',
+        row['isDeleted'] ? '1' : '0',
+        row['notes'] ?? '',
+      ]);
     }
-    return goals;
+    
+    final csvString = const ListToCsvConverter().convert(csvData);
+    return csvString;
+  }
+
+  /// Importe des transactions depuis un format CSV.
+  /// Le CSV doit contenir les colonnes : id, amount, category, description, date, type, isDeleted, notes
+  /// Les lignes dont l'ID existe déjà seront mises à jour (INSERT OR REPLACE logic).
+  Future<int> importTransactionsFromCsv(String csvData) async {
+    final List<List<dynamic>> parsed =
+        const ListToCsvConverter().convert(csvData, firstRowIsHeader: true);
+    
+    int imported = 0;
+    final db = await database;
+    
+    for (int i = 1; i < parsed.length; i++) { // Skip header
+      final row = parsed[i];
+      if (row.length < 7) continue;
+      
+      final dateString = row[4] as String?;
+      final date = DateTime.tryParse(dateString ?? '');
+      if (date == null) continue;
+      
+      final amount = double.tryParse(row[1] as String?) ?? 0.0;
+      final category = row[2] as String?;
+      final description = row[3] as String?;
+      final typeString = row[5] as String?;
+      final TransactionType? type =
+          typeString == 'income'
+              ? TransactionType.income
+              : typeString == 'expense'
+                  ? TransactionType.expense
+                  : null;
+      final isDeleted = row[6] == '1';
+      final notes = row.length > 7 ? row[7] as String? : '';
+      
+      if (type == null) continue;
+      
+      final id = row[0] as String?;
+      // Vérifier si l'ID existe déjà - si oui, mettre à jour; sinon, insérer
+      final existing = await db.query(
+        'transaction',
+        where: 'id = ?',
+        whereArgs: [id],
+      );
+      
+      if (existing.isNotEmpty) {
+        // Mise à jour de la transaction existante
+        await db.update('transaction', {
+          'amount': amount,
+          'category': category ?? '',
+          'description': description ?? '',
+          'date': date.toIso8601String(),
+          'type': type == TransactionType.income ? 'income' : 'expense',
+          'isDeleted': isDeleted ? 1 : 0,
+          'notes': notes.isNotEmpty ? notes : '',
+        }, where: 'id = ?', whereArgs: [id]);
+      } else {
+        // Insertion nouvelle
+        await db.insertTransaction(
+          Transaction(
+            id: id,
+            amount: amount,
+            category: category ?? '',
+            description: description ?? '',
+            date: date,
+            type: type,
+            notes: notes.isNotEmpty ? notes : null,
+            isDeleted: isDeleted,
+          ),
+        );
+      }
+      imported++;
+    }
+    
+    return imported;
   }
 }
+

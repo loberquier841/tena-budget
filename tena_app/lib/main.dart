@@ -72,8 +72,7 @@ class _TenaHomeState extends State<TenaHome> {
   int selectedIndex = 0;
 
   /// Période partagée par les pages : le mois sélectionné sur le tableau de
-  /// bord s'applique également au module Budget (PeriodState était jusqu'ici
-  /// créé mais jamais utilisé).
+  /// bord s'applique également au module Budget (PeriodState est utilisé dans DashboardPage et BudgetPage.
   final PeriodState _period = PeriodState();
 
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
