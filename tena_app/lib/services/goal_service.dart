@@ -1,6 +1,7 @@
 import 'dart:convert';
+import 'package:flutter/material.dart';
 
-import 'database_service.dart' as database_service;
+import 'database_service.dart';
 
 /// Catégorie d'objectif d'épargne
 enum GoalCategory {
@@ -175,7 +176,7 @@ class Goal {
   }
 
   /// Convertit une [GoalEntry] de la base en [Goal] pour l'interface.
-  factory Goal.fromEntry(database_service.GoalEntry entry) {
+  factory Goal.fromEntry(GoalEntry entry) {
     List<int> parsedMilestones;
     try {
       parsedMilestones = (jsonDecode(entry.milestones) as List).map((e) => (e as num).toInt()).toList();
@@ -202,14 +203,14 @@ class Goal {
 class GoalService {
   static final DatabaseService _db = DatabaseService.instance;
 
-  static Future<List<Goal>> getGoals() async {
-    final entries = await _db.getGoals();
+  static Future<List<Goal>> getGoals({String userId = 'primary'}) async {
+    final entries = await _db.getGoals(userId: userId);
     return entries.map((e) => Goal.fromEntry(e)).toList();
   }
 
-  static Future<void> saveGoals(List<Goal> goals) async {
+  static Future<void> saveGoals(List<Goal> goals, {String userId = 'primary'}) async {
     for (final goal in goals) {
-      await _db.insertGoal(database_service.GoalEntry(
+      await _db.insertGoal(GoalEntry(
         id: goal.id,
         name: goal.name,
         targetCents: goal.targetCents,
@@ -221,7 +222,7 @@ class GoalService {
         milestones: jsonEncode(goal.milestones),
         createdAt: goal.createdAt.toIso8601String(),
         updatedAt: goal.updatedAt.toIso8601String(),
-      ));
+      ), userId: userId);
     }
   }
 
@@ -234,8 +235,9 @@ class GoalService {
     double? recurringAmountEuros,
     DateTime? recurringStartDate,
     List<int>? milestones,
+    String userId = 'primary',
   }) async {
-    final goals = await getGoals();
+    final goals = await getGoals(userId: userId);
     final now = DateTime.now();
 
     goals.add(
@@ -254,11 +256,11 @@ class GoalService {
       ),
     );
 
-    await saveGoals(goals);
+    await saveGoals(goals, userId: userId);
   }
 
-  static Future<void> updateGoal(Goal updatedGoal) async {
-    await _db.insertGoal(database_service.GoalEntry(
+  static Future<void> updateGoal(Goal updatedGoal, {String userId = 'primary'}) async {
+    await _db.insertGoal(GoalEntry(
       id: updatedGoal.id,
       name: updatedGoal.name,
       targetCents: updatedGoal.targetCents,
@@ -270,10 +272,10 @@ class GoalService {
       milestones: jsonEncode(updatedGoal.milestones),
       createdAt: updatedGoal.createdAt.toIso8601String(),
       updatedAt: DateTime.now().toIso8601String(),
-    ));
+    ), userId: userId);
   }
 
-  static Future<void> deleteGoal(String id) async {
-    await _db.deleteGoal(id);
+  static Future<void> deleteGoal(String id, {String userId = 'primary'}) async {
+    await _db.deleteGoal(id, userId: userId);
   }
 }

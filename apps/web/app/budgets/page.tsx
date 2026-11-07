@@ -1,5 +1,5 @@
 import { auth } from "@/auth";
-import { getLocalBudgets, LocalBudget } from "@/sync/dexie";
+import { getLocalBudgets, LocalBudget } from '@/lib/tena-core-dexie';
 
 export default async function BudgetsPage() {
   const session = await auth();

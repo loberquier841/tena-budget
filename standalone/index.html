@@ -1,0 +1,537 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TENΛ Budget — Votre argent. Vos règles. Zéro serveur.</title>
+  <meta name="description" content="L'application de gestion financière personnelle 100% locale, chiffrée et gratuite. Disponible sur Mac, Windows, Linux, Android et iOS.">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%2309090b'/><path d='M30 75 L50 25 L70 75 L58 75 L50 50 L42 75 Z' fill='%23d4af37'/></svg>">
+  <style>
+    :root {
+      --bg: #09090b;
+      --card-bg: #121215;
+      --card-border: #23232a;
+      --gold: #d4af37;
+      --gold-light: #f3df8a;
+      --gold-glow: rgba(212, 175, 55, 0.25);
+      --text: #f5f5f7;
+      --text-muted: #9e9ea7;
+      --emerald: #10b981;
+      --rose: #f43f5e;
+      --radius: 16px;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background-color: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', Roboto, sans-serif;
+      line-height: 1.6;
+      overflow-x: hidden;
+      background-image: 
+        radial-gradient(ellipse at 85% 10%, rgba(212, 175, 55, 0.08) 0%, transparent 50%),
+        radial-gradient(ellipse at 15% 40%, rgba(212, 175, 55, 0.05) 0%, transparent 40%);
+    }
+    a { color: inherit; text-decoration: none; }
+
+    /* Conteneur */
+    .container { width: min(1200px, 92%); margin: 0 auto; }
+
+    /* Header */
+    header {
+      position: sticky; top: 0; z-index: 100;
+      backdrop-filter: blur(16px);
+      background: rgba(9, 9, 11, 0.85);
+      border-bottom: 1px solid var(--card-border);
+      padding: 16px 0;
+    }
+    .header-content {
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .logo {
+      display: flex; align-items: center; gap: 12px;
+      font-weight: 800; font-size: 20px; letter-spacing: 2px;
+      color: var(--gold-light);
+    }
+    .logo-badge {
+      width: 36px; height: 36px;
+      background: linear-gradient(135deg, #2a2312, #18150c);
+      border: 1px solid var(--gold);
+      border-radius: 10px;
+      display: flex; align-items: center; justify-content: center;
+      font-weight: 900; color: var(--gold); font-size: 18px;
+    }
+    nav { display: flex; gap: 28px; align-items: center; }
+    nav a {
+      font-size: 14px; font-weight: 500; color: var(--text-muted);
+      transition: color 0.2s;
+    }
+    nav a:hover { color: var(--gold-light); }
+    .btn-gold {
+      background: linear-gradient(135deg, var(--gold-light), var(--gold));
+      color: #09090b !important;
+      padding: 10px 22px;
+      border-radius: 999px;
+      font-weight: 700;
+      font-size: 14px;
+      box-shadow: 0 4px 18px var(--gold-glow);
+      transition: transform 0.2s, box-shadow 0.2s;
+      display: inline-flex; align-items: center; gap: 8px;
+    }
+    .btn-gold:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 24px rgba(212, 175, 55, 0.4);
+    }
+    .btn-outline {
+      border: 1px solid var(--card-border);
+      padding: 10px 22px;
+      border-radius: 999px;
+      font-weight: 600; font-size: 14px;
+      color: var(--text);
+      transition: background 0.2s, border-color 0.2s;
+    }
+    .btn-outline:hover {
+      background: rgba(255, 255, 255, 0.05);
+      border-color: var(--gold);
+    }
+
+    /* Hero Section */
+    .hero {
+      padding: 90px 0 60px;
+      text-align: center;
+      position: relative;
+    }
+    .hero-eyebrow {
+      display: inline-flex; align-items: center; gap: 8px;
+      background: rgba(212, 175, 55, 0.1);
+      border: 1px solid rgba(212, 175, 55, 0.3);
+      padding: 6px 16px; border-radius: 999px;
+      font-size: 12px; font-weight: 700; letter-spacing: 1.5px;
+      color: var(--gold-light); text-transform: uppercase;
+      margin-bottom: 24px;
+    }
+    .hero h1 {
+      font-size: clamp(38px, 6vw, 68px);
+      font-weight: 850;
+      letter-spacing: -1.5px;
+      line-height: 1.1;
+      max-width: 900px;
+      margin: 0 auto 24px;
+    }
+    .hero h1 span {
+      background: linear-gradient(135deg, #ffffff 40%, var(--gold-light) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .hero p.lead {
+      font-size: clamp(16px, 2vw, 20px);
+      color: var(--text-muted);
+      max-width: 680px;
+      margin: 0 auto 36px;
+      line-height: 1.6;
+    }
+    .hero-cta {
+      display: flex; gap: 16px; justify-content: center; flex-wrap: wrap;
+      margin-bottom: 40px;
+    }
+    .badges-row {
+      display: flex; justify-content: center; gap: 24px; flex-wrap: wrap;
+      font-size: 13px; color: var(--text-muted);
+    }
+    .badge-item { display: flex; align-items: center; gap: 8px; }
+    .badge-item span { color: var(--gold); font-weight: bold; }
+
+    /* Interactive Preview Card */
+    .preview-card {
+      margin: 50px auto 0;
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 20px;
+      padding: 28px;
+      box-shadow: 0 30px 80px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(212, 175, 55, 0.15);
+      position: relative;
+      text-align: left;
+    }
+    .preview-top {
+      display: flex; justify-content: space-between; align-items: center;
+      padding-bottom: 20px; border-bottom: 1px solid var(--card-border);
+      margin-bottom: 24px;
+    }
+    .window-dots { display: flex; gap: 6px; }
+    .window-dots i { width: 10px; height: 10px; border-radius: 50%; background: #333; display: inline-block; }
+    .stats-grid {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 16px; margin-bottom: 24px;
+    }
+    .stat-box {
+      background: rgba(255, 255, 255, 0.02);
+      border: 1px solid var(--card-border);
+      border-radius: 12px; padding: 18px;
+    }
+    .stat-label { font-size: 12px; color: var(--text-muted); margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px; }
+    .stat-value { font-size: 24px; font-weight: 800; }
+    .stat-income { color: var(--emerald); }
+    .stat-expense { color: var(--rose); }
+    .stat-gold { color: var(--gold-light); }
+
+    /* Section Features */
+    .section { padding: 90px 0; border-top: 1px solid var(--card-border); }
+    .section-header { text-align: center; max-width: 680px; margin: 0 auto 54px; }
+    .section-tag { color: var(--gold); font-size: 12px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; margin-bottom: 12px; }
+    .section-title { font-size: clamp(28px, 4vw, 42px); font-weight: 800; letter-spacing: -0.5px; margin-bottom: 16px; }
+    .section-desc { color: var(--text-muted); font-size: 16px; }
+
+    .grid-3 {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      gap: 24px;
+    }
+    .feature-card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: var(--radius);
+      padding: 32px;
+      transition: transform 0.2s, border-color 0.2s;
+    }
+    .feature-card:hover {
+      transform: translateY(-4px);
+      border-color: rgba(212, 175, 55, 0.4);
+    }
+    .feature-icon {
+      width: 48px; height: 48px; border-radius: 12px;
+      background: rgba(212, 175, 55, 0.1);
+      border: 1px solid rgba(212, 175, 55, 0.25);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 22px; color: var(--gold); margin-bottom: 20px;
+    }
+    .feature-card h3 { font-size: 20px; font-weight: 700; margin-bottom: 12px; }
+    .feature-card p { color: var(--text-muted); font-size: 14px; line-height: 1.6; }
+
+    /* Multiplatform Section */
+    .platform-pills {
+      display: flex; justify-content: center; gap: 14px; flex-wrap: wrap; margin-top: 36px;
+    }
+    .platform-pill {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      padding: 14px 22px; border-radius: 12px;
+      display: flex; align-items: center; gap: 10px;
+      font-size: 14px; font-weight: 600;
+    }
+    .platform-pill span { color: var(--gold); }
+
+    /* Pricing Section */
+    .pricing-grid {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 24px; max-width: 900px; margin: 0 auto;
+    }
+    .pricing-card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: var(--radius); padding: 36px 28px;
+      position: relative;
+    }
+    .pricing-card.featured {
+      border-color: var(--gold);
+      background: linear-gradient(180deg, #181610 0%, var(--card-bg) 100%);
+      box-shadow: 0 20px 60px rgba(212, 175, 55, 0.15);
+    }
+    .pricing-tag {
+      position: absolute; top: -12px; right: 24px;
+      background: var(--gold); color: #09090b;
+      font-size: 11px; font-weight: 800; padding: 4px 12px; border-radius: 999px;
+    }
+    .price { font-size: 42px; font-weight: 900; margin: 20px 0 10px; }
+    .price small { font-size: 15px; color: var(--text-muted); font-weight: normal; }
+    .pricing-features { list-style: none; margin: 24px 0 32px; font-size: 14px; color: var(--text-muted); }
+    .pricing-features li { margin-bottom: 12px; display: flex; align-items: center; gap: 10px; }
+    .pricing-features li span { color: var(--gold); }
+
+    /* FAQ */
+    .faq-list { max-width: 780px; margin: 0 auto; }
+    details {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 12px; margin-bottom: 14px;
+      padding: 18px 24px;
+    }
+    details[open] { border-color: rgba(212, 175, 55, 0.4); }
+    summary {
+      font-weight: 700; font-size: 16px; cursor: pointer; list-style: none;
+      display: flex; justify-content: space-between; align-items: center;
+    }
+    summary::-webkit-details-marker { display: none; }
+    summary::after { content: "+"; font-size: 20px; color: var(--gold); }
+    details[open] summary::after { content: "−"; }
+    details p { margin-top: 14px; color: var(--text-muted); font-size: 14px; line-height: 1.6; }
+
+    /* Footer */
+    footer {
+      border-top: 1px solid var(--card-border);
+      padding: 50px 0 30px; text-align: center;
+      color: var(--text-muted); font-size: 13px;
+    }
+    .footer-links { display: flex; justify-content: center; gap: 24px; margin: 20px 0; }
+  </style>
+</head>
+<body>
+
+  <!-- Navigation -->
+  <header>
+    <div class="container header-content">
+      <div class="logo">
+        <div class="logo-badge">Λ</div>
+        <span>TENΛ BUDGET</span>
+      </div>
+      <nav>
+        <a href="#fonctionnalites">Fonctionnalités</a>
+        <a href="#multiplateforme">Plateformes</a>
+        <a href="#tarifs">Offres</a>
+        <a href="#securite">Sécurité</a>
+        <a href="#faq">FAQ</a>
+        <a href="/app" class="btn-gold">Lancer l'Application ↗</a>
+      </nav>
+    </div>
+  </header>
+
+  <!-- Hero Section -->
+  <main class="container">
+    <section class="hero">
+      <div class="hero-eyebrow">
+        <span>●</span> Architecture 100% Locale • Zéro Serveur
+      </div>
+      <h1>
+        Prenez le contrôle absolu<br>
+        <span>de vos finances personnelles.</span>
+      </h1>
+      <p class="lead">
+        TENΛ Budget est l'application financière conçue pour fonctionner directement sur vos appareils.
+        Sans abonnement obligatoire, sans serveur central, et avec un chiffrement local inviolable.
+      </p>
+      <div class="hero-cta">
+        <a href="/app" class="btn-gold" style="font-size: 16px; padding: 14px 32px;">
+          Ouvrir l'application sur mon Mac →
+        </a>
+        <a href="#fonctionnalites" class="btn-outline" style="font-size: 16px; padding: 14px 28px;">
+          Explorer les fonctionnalités
+        </a>
+      </div>
+      <div class="badges-row">
+        <div class="badge-item"><span>✓</span> 0 € / mois garanti</div>
+        <div class="badge-item"><span>✓</span> Chiffrement AES-256 local</div>
+        <div class="badge-item"><span>✓</span> Fonctionne 100% hors ligne</div>
+        <div class="badge-item"><span>✓</span> Zéro revente de données</div>
+      </div>
+
+      <!-- Preview Live -->
+      <div class="preview-card">
+        <div class="preview-top">
+          <div class="window-dots"><i></i><i></i><i></i></div>
+          <div style="font-size: 12px; color: var(--gold); font-weight: 700; letter-spacing: 1px;">
+            TABLEAU DE BORD LOCAL — NOVEMBRE 2026
+          </div>
+          <div style="font-size: 12px; color: var(--text-muted);">Coffre SQLite chiffré ✓</div>
+        </div>
+        <div class="stats-grid">
+          <div class="stat-box">
+            <div class="stat-label">Solde Actuel</div>
+            <div class="stat-value stat-gold">3 420,50 €</div>
+          </div>
+          <div class="stat-box">
+            <div class="stat-label">Revenus du mois</div>
+            <div class="stat-value stat-income">+2 850,00 €</div>
+          </div>
+          <div class="stat-box">
+            <div class="stat-label">Dépenses du mois</div>
+            <div class="stat-value stat-expense">-1 429,50 €</div>
+          </div>
+          <div class="stat-box">
+            <div class="stat-label">Reste à vivre prévu</div>
+            <div class="stat-value stat-gold">1 420,50 €</div>
+          </div>
+        </div>
+        <div style="display: flex; justify-content: space-between; align-items: center; background: rgba(255,255,255,0.02); padding: 14px 20px; border-radius: 10px; border: 1px solid var(--card-border);">
+          <div style="font-size: 13px; color: var(--text-muted);">
+            Dernières opérations : <b style="color: #fff;">Courses bio (-64,20 €)</b>, <b style="color: #fff;">Salaire principal (+2 850 €)</b>
+          </div>
+          <a href="/app" style="color: var(--gold); font-size: 13px; font-weight: bold;">Accéder à mes données →</a>
+        </div>
+      </div>
+    </section>
+
+    <!-- Fonctionnalités -->
+    <section class="section" id="fonctionnalites">
+      <div class="section-header">
+        <div class="section-tag">FONCTIONNALITÉS ESSENTIELLES</div>
+        <h2 class="section-title">Une maîtrise financière totale.</h2>
+        <p class="section-desc">Tout ce dont vous avez besoin pour suivre, prévoir et épargner sans complexité inutile.</p>
+      </div>
+
+      <div class="grid-3">
+        <div class="feature-card">
+          <div class="feature-icon">💳</div>
+          <h3>Revenus & Dépenses</h3>
+          <p>Enregistrez vos flux d'argent au centime près. Catégorisation fluide, notes libres, gestion des virements internes et corbeille de restauration.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">📊</div>
+          <h3>Enveloppes Budgétaires</h3>
+          <p>Définissez des plafonds par catégorie de dépenses (Alimentation, Logement, Loisirs). Jauges visuelles en direct avec alertes préventives.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">🎯</div>
+          <h3>Objectifs d'Épargne</h3>
+          <p>Associez un projet, un montant cible et une date butoir. Suivez votre progression mois après mois et calculez l'effort d'épargne idéal.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">📈</div>
+          <h3>Prévisions de Trésorerie</h3>
+          <p>Anticipez votre solde à la fin du mois grâce à l'extrapolation basée sur vos transactions réelles et vos dépenses récurrentes.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">📥</div>
+          <h3>Import & Export CSV</h3>
+          <p>Importez facilement vos relevés bancaires en CSV ou exportez l'intégralité de votre historique en un clic pour vos tableurs préférés.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">🔒</div>
+          <h3>Chiffrement Local AES-256</h3>
+          <p>Vos montants et descriptions sont chiffrés avant d'être écrits sur votre disque. Aucun tiers, même nous, n'a accès à vos chiffres.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Multiplateforme -->
+    <section class="section" id="multiplateforme">
+      <div class="section-header">
+        <div class="section-tag">ÉCOSYSTÈME COMPLET</div>
+        <h2 class="section-title">Sur tous vos appareils.</h2>
+        <p class="section-desc">Une interface unifiée pensée pour chaque taille d'écran, du smartphone à l'ordinateur de bureau.</p>
+      </div>
+
+      <div class="platform-pills">
+        <div class="platform-pill"><span></span> macOS (Apple Silicon & Intel)</div>
+        <div class="platform-pill"><span>🪟</span> Windows (10/11)</div>
+        <div class="platform-pill"><span>🐧</span> Linux (AppImage / Flatpak)</div>
+        <div class="platform-pill"><span>🤖</span> Android (APK & Play Store)</div>
+        <div class="platform-pill"><span>📱</span> iOS (iPhone & iPad)</div>
+        <div class="platform-pill"><span>🌐</span> Web (PWA Hors ligne)</div>
+      </div>
+    </section>
+
+    <!-- Offres -->
+    <section class="section" id="tarifs">
+      <div class="section-header">
+        <div class="section-tag">TARIFS TRANSPARENTS</div>
+        <h2 class="section-title">0 € par mois. Pour de vrai.</h2>
+        <p class="section-desc">Pas de piège, pas d'essai payant caché. L'accès à la liberté financière personnelle commence ici.</p>
+      </div>
+
+      <div class="pricing-grid">
+        <div class="pricing-card featured">
+          <div class="pricing-tag">OFFRE ACTUELLE</div>
+          <h3 style="font-size: 22px; font-weight: 800;">TENΛ Personnel</h3>
+          <p style="color: var(--text-muted); font-size: 13px;">Gestion financière locale complète</p>
+          <div class="price">0 € <small>/ pour toujours</small></div>
+          <ul class="pricing-features">
+            <li><span>✓</span> Toutes les fonctionnalités financières</li>
+            <li><span>✓</span> Stockage SQLite chiffré illimité</li>
+            <li><span>✓</span> Importation & Exportation CSV</li>
+            <li><span>✓</span> Prévisions et alertes de budget</li>
+            <li><span>✓</span> 100% Hors ligne, aucun serveur</li>
+          </ul>
+          <a href="/app" class="btn-gold" style="width: 100%; justify-content: center;">
+            Commencer maintenant →
+          </a>
+        </div>
+
+        <div class="pricing-card">
+          <h3 style="font-size: 22px; font-weight: 800; color: var(--text-muted);">Famille & Pro</h3>
+          <p style="color: var(--text-muted); font-size: 13px;">Évolutions futures planifiées</p>
+          <div class="price" style="color: var(--text-muted);">Futur <small>/ sans engagement</small></div>
+          <ul class="pricing-features">
+            <li><span>○</span> Multi-profils familiaux</li>
+            <li><span>○</span> Budgets partagés sécurisés</li>
+            <li><span>○</span> Gestion de micro-entreprise</li>
+            <li><span>○</span> Option de synchronisation P2P</li>
+          </ul>
+          <button disabled class="btn-outline" style="width: 100%; opacity: 0.5; cursor: not-allowed;">
+            À venir
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Sécurité & Éthique -->
+    <section class="section" id="securite">
+      <div class="section-header">
+        <div class="section-tag">SÉCURITÉ & CONFIDENTIALITÉ</div>
+        <h2 class="section-title">Pourquoi TENΛ est différent ?</h2>
+        <p class="section-desc">La plupart des applications financières revendent vos données ou vous obligent à connecter vos comptes bancaires à des serveurs tiers. Nous refusons ce modèle.</p>
+      </div>
+
+      <div class="grid-3">
+        <div class="feature-card">
+          <h3 style="color: var(--gold-light);">Aucun compte en ligne requis</h3>
+          <p>Pas d'adresse e-mail obligatoire, pas de mot de passe stocké sur un serveur central. Votre coffre est hébergé exclusivement sur votre disque dur.</p>
+        </div>
+        <div class="feature-card">
+          <h3 style="color: var(--gold-light);">Aucun accès bancaire imposé</h3>
+          <p>Vous n'avez pas à donner vos identifiants bancaires secrets. Vous saisissez manuellement ou importez vos fichiers bancaires en toute discrétion.</p>
+        </div>
+        <div class="feature-card">
+          <h3 style="color: var(--gold-light);">Pérennité garantie</h3>
+          <p>Même si nous arrêtions le développement demain, votre application et vos données continueront de fonctionner à vie sur votre ordinateur.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- FAQ -->
+    <section class="section" id="faq">
+      <div class="section-header">
+        <div class="section-tag">QUESTIONS FRÉQUENTES</div>
+        <h2 class="section-title">Tout ce que vous devez savoir.</h2>
+      </div>
+
+      <div class="faq-list">
+        <details>
+          <summary>Est-ce que je dois payer un abonnement ?</summary>
+          <p>Non. TENΛ Budget personnel est conçu pour fonctionner sans aucun abonnement payant ni serveur obligatoire. Vos données sont hébergées sur votre machine à coût zéro.</p>
+        </details>
+        <details>
+          <summary>Mes données financières sont-elles envoyées sur Internet ?</summary>
+          <p>Absolument pas. L'application enregistre tout localement dans votre coffre SQLite ou votre stockage local chiffré. Aucune information financière ne transite par nos serveurs.</p>
+        </details>
+        <details>
+          <summary>Comment puis-je récupérer mes données sur un autre ordinateur ?</summary>
+          <p>Grâce au module de Sauvegarde et d'Export CSV/JSON intégré, vous pouvez générer une archive chiffrée en un clic et la restaurer sur n'importe quel autre appareil exécutant TENΛ Budget.</p>
+        </details>
+        <details>
+          <summary>L'application fonctionne-t-elle sans connexion Internet ?</summary>
+          <p>Oui, à 100%. L'application est native et hors-ligne par conception. Vous pouvez gérer vos comptes en avion, en voyage ou sans réseau.</p>
+        </details>
+      </div>
+    </section>
+  </main>
+
+  <!-- Footer -->
+  <footer>
+    <div class="container">
+      <div class="logo" style="justify-content: center; margin-bottom: 12px;">
+        <div class="logo-badge">Λ</div>
+        <span>TENΛ BUDGET</span>
+      </div>
+      <p>L'écosystème financier personnel souverain, local et sécurisé.</p>
+      <div class="footer-links">
+        <a href="#fonctionnalites">Fonctionnalités</a>
+        <a href="#tarifs">Offres</a>
+        <a href="#securite">Sécurité</a>
+        <a href="#faq">FAQ</a>
+        <a href="/app">Ouvrir l'App</a>
+      </div>
+      <p style="margin-top: 20px; font-size: 12px; color: #555;">
+        © 2026 TENΛ Budget. Tous droits réservés. Conception souveraine sans serveur.
+      </p>
+    </div>
+  </footer>
+
+</body>
+</html>

@@ -1,4 +1,7 @@
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
+import 'package:path/path.dart' as p;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
@@ -28,6 +31,7 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   late _MemoryKeyStore keyStore;
+  late Directory tempDir;
 
   setUpAll(() {
     sqfliteFfiInit();
@@ -36,12 +40,25 @@ void main() {
 
   setUp(() async {
     SharedPreferences.setMockInitialValues({});
+    tempDir = await Directory.systemTemp.createTemp('tena_db_test_');
+    await DatabaseService.resetAndDeleteTestDatabase();
+    DatabaseService.testDatabasePath = p.join(tempDir.path, 'test.db');
     keyStore = _MemoryKeyStore();
+    CryptoService.debugSetKey(null);
     CryptoService.useKeyStore(keyStore);
-    DatabaseService.resetForTesting();
   });
 
-  group('DatabaseService — budgets', () {
+  tearDown(() async {
+    await DatabaseService.resetAndDeleteTestDatabase();
+    DatabaseService.testDatabasePath = null;
+    if (tempDir.existsSync()) {
+      try {
+        await tempDir.delete(recursive: true);
+      } catch (_) {}
+    }
+  });
+
+group('DatabaseService — budgets', () {
     test('création et lecture d’un budget global', () async {
       await DatabaseService.instance.setGlobalBudget(2000);
 
@@ -106,11 +123,13 @@ void main() {
 
   group('DatabaseService — objectifs', () {
     test('création et lecture d’un objectif', () async {
-      await DatabaseService.instance.insertGoal(GoalEntry(
+      await DatabaseService.instance.insertGoal(const GoalEntry(
         id: 'g1',
         name: 'Voyage Japon',
         targetCents: 5000,
         savedCents: 1200,
+        createdAt: '2026-01-01T00:00:00Z',
+        updatedAt: '2026-01-01T00:00:00Z',
       ));
 
       final goals = await DatabaseService.instance.getGoals();
@@ -122,18 +141,22 @@ void main() {
     });
 
     test('mise à jour d’un objectif conserve l’identifiant', () async {
-      await DatabaseService.instance.insertGoal(GoalEntry(
+      await DatabaseService.instance.insertGoal(const GoalEntry(
         id: 'g2',
         name: 'Vélo',
         targetCents: 800,
         savedCents: 200,
+        createdAt: '2026-01-01T00:00:00Z',
+        updatedAt: '2026-01-01T00:00:00Z',
       ));
 
-      await DatabaseService.instance.updateGoal(GoalEntry(
+      await DatabaseService.instance.updateGoal(const GoalEntry(
         id: 'g2',
         name: 'Vélo',
         targetCents: 800,
         savedCents: 500,
+        createdAt: '2026-01-01T00:00:00Z',
+        updatedAt: '2026-01-01T00:00:00Z',
       ));
 
       final goals = await DatabaseService.instance.getGoals();
@@ -142,11 +165,13 @@ void main() {
     });
 
     test('suppression logique d’un objectif l’exclue de la liste', () async {
-      await DatabaseService.instance.insertGoal(GoalEntry(
+      await DatabaseService.instance.insertGoal(const GoalEntry(
         id: 'g3',
         name: 'Temporaire',
         targetCents: 100,
         savedCents: 10,
+        createdAt: '2026-01-01T00:00:00Z',
+        updatedAt: '2026-01-01T00:00:00Z',
       ));
       await DatabaseService.instance.deleteGoal('g3');
 
@@ -155,11 +180,13 @@ void main() {
     });
 
     test('les champs sensibles sont chiffrés au repos', () async {
-      await DatabaseService.instance.insertGoal(GoalEntry(
+      await DatabaseService.instance.insertGoal(const GoalEntry(
         id: 'g4',
         name: 'Objectif Secret',
         targetCents: 9999,
         savedCents: 111,
+        createdAt: '2026-01-01T00:00:00Z',
+        updatedAt: '2026-01-01T00:00:00Z',
       ));
 
       final db = await DatabaseService.instance.database;

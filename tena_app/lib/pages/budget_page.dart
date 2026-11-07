@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../models/transaction.dart';
 import '../services/budget_service.dart';
 import '../services/category_service.dart';
+import '../services/app_scope.dart';
 import '../services/database_service.dart';
 import '../theme/tena_theme.dart';
 import '../widgets/tena_card.dart';
@@ -48,15 +49,15 @@ class _BudgetPageState extends State<BudgetPage> {
   }
 
   Future<void> _load() async {
-    final categories = await CategoryService.getCategories();
-    final transactions = await _database.getTransactions();
-    final globalBudget = await BudgetService.getGlobalBudget();
+    final categories = await CategoryService.getCategories(userId: AppScope.activeUserId);
+    final transactions = await _database.getTransactions(userId: AppScope.activeUserId);
+    final globalBudget = await BudgetService.getGlobalBudget(userId: AppScope.activeUserId);
 
     final categoryBudgets = <String, double>{};
 
     for (final category in categories) {
       categoryBudgets[category] =
-          await BudgetService.getCategoryBudget(category);
+          await BudgetService.getCategoryBudget(category, userId: AppScope.activeUserId);
     }
 
     if (!mounted) return;
@@ -157,12 +158,12 @@ class _BudgetPageState extends State<BudgetPage> {
 
     if (value == null) return;
 
-    await BudgetService.setGlobalBudget(value);
+    await BudgetService.setGlobalBudget(value, userId: AppScope.activeUserId);
     await _load();
   }
 
   Future<void> _editCategoryBudget(String category) async {
-    final current = await BudgetService.getCategoryBudget(category);
+    final current = await BudgetService.getCategoryBudget(category, userId: AppScope.activeUserId);
 
     if (!mounted) return;
 
@@ -210,7 +211,7 @@ class _BudgetPageState extends State<BudgetPage> {
 
     if (value == null) return;
 
-    await BudgetService.setCategoryBudget(category, value);
+    await BudgetService.setCategoryBudget(category, value, userId: AppScope.activeUserId);
     await _load();
   }
 

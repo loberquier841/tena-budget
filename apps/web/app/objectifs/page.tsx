@@ -1,5 +1,5 @@
 import { auth } from "@/auth";
-import { getLocalSavingGoals, LocalSavingGoal, calculateProgress, SavingGoal } from "@/sync/dexie";
+import { getLocalSavingGoals, LocalSavingGoal, calculateProgress, SavingGoal } from '@/sync/dexie';
 
 export default async function ObjectifsPage() {
   const session = await auth();

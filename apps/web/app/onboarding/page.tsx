@@ -15,13 +15,13 @@ import {
   type NotificationPreference,
   type DashboardCardId,
 } from '@tena/core';
-import { createLocalVault, activateLocalVault } from '@tena/core/localVault';
+import { createLocalVault, activateLocalVault } from '@/lib/tena-core-shims';
 import {
   saveLocalUserProfile,
   getLocalUserProfile,
   saveLocalOnboardingProgress,
   getLocalOnboardingProgress,
-} from '@tena/core/sync/dexie';
+} from '@/lib/tena-core-dexie';
 
 type OnboardingStep =
   | 'vault'

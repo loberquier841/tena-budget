@@ -1,103 +1,42 @@
-import { APP_NAME, APP_VERSION } from "@tena/shared";
+export const metadata = {
+  title: 'Téléchargements',
+  description: 'État réel des binaires TENΛ Budget. Aucun téléchargement fictif.',
+};
 
 export default function DownloadPage() {
-  const windowsArchitectures = ["x64", "ia32"];
-  const currentVersion = APP_VERSION || "0.1.0";
-  const publishDate = new Date("2024-01-15");
+  // IMPORTANT: ne jamais afficher de lien/binaire si le fichier n'existe pas et
+  // n'est pas vérifié. Aucun faux "disponible".
+  const releases = [
+    { platform: 'Windows', status: 'Non disponible (binaire non publié/vérifié)', detail: 'Aucun installeur distribué à ce stade. Build/signature à produire et vérifier avant publication.' },
+    { platform: 'macOS', status: 'Non disponible (binaire non publié/vérifié)', detail: 'Nécessite Xcode + signature/notarisation. Aucun DMG/PKG distribué.' },
+    { platform: 'Linux', status: 'Non disponible (binaire non publié/vérifié)', detail: 'Aucun paquet distribué.' },
+    { platform: 'Android / iOS', status: 'Non disponible (publication store non effectuée)', detail: 'Aucun binaire store distribué.' },
+  ];
 
   return (
-    <main className="max-w-2xl mx-auto py-12">
-      <header className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900 mb-4">
-          Télécharger TENΛ Budget pour Windows
-        </h1>
-        <p className="text-lg text-gray-600">
-          Application de gestion budgétaire personnelle hors ligne
-        </p>
-      </header>
+    <main style={{ maxWidth: 880, margin: '0 auto', padding: '48px 20px', color: '#f5f5f7' }}>
+      <h1 style={{ fontSize: 34, margin: '0 0 8px' }}>Téléchargements</h1>
+      <p style={{ color: '#a0a0ab', lineHeight: 1.6, marginTop: 0 }}>
+        Transparence : aucun binaire n’est proposé tant qu’il n’est pas réellement compilé,
+        signé (si requis) et vérifié. L’application financière reste locale/offline.
+      </p>
 
-      <section className="bg-gray-50 rounded-lg p-6 mb-8">
-        <h2 className="text-xl font-semibold text-gray-900 mb-4">
-          Version disponible
-        </h2>
-        <p className="text-gray-600">
-          {currentVersion}
-        </p>
-        <p className="text-sm text-gray-500 mt-2">
-          Publié le {publishDate.toLocaleDateString("fr-FR", {
-            year: "numeric",
-            month: "long",
-            day: "numeric",
-          })}
-        </p>
-      </section>
-
-      <section className="bg-white rounded-lg p-6 mb-8 shadow">
-        <h2 className="text-xl font-semibold text-gray-900 mb-4">
-          Architectures supportées
-        </h2>
-        <ul className="space-y-2 text-gray-600 text-sm">
-          {windowsArchitectures.map((arch) => (
-            <li key={arch}>{
-              arch === "x64" && "Processeurs 64 bits (recommandé)"
-            } {arch === "ia32" && "Processeurs 32 bits"}
-          </li>)
-          )}
+      <section style={{ background: '#141416', border: '1px solid #2a2a30', borderRadius: 14, padding: 20, margin: '20px 0' }}>
+        <h2 style={{ fontSize: 18, margin: '0 0 12px' }}>État des plateformes</h2>
+        <ul style={{ margin: 0, paddingLeft: 18, color: '#c7c7ce', lineHeight: 1.7 }}>
+          {releases.map((r) => (
+            <li key={r.platform}><strong style={{ color: '#f5f5f7' }}>{r.platform}</strong> — {r.status}<br /><span style={{ color: '#8b8b96', fontSize: 13 }}>{r.detail}</span></li>
+          ))}
         </ul>
       </section>
 
-      <section className="bg-white rounded-lg p-6 mb-8 shadow">
-        <h2 className="text-xl font-semibold text-gray-900 mb-4">
-          Prérequis
-        </h2>
-        <ul className="space-y-2 text-gray-600 text-sm">
-          <li>Windows 10 ou version ultérieure</li>
-          <li>Espace disque minimum : 200 Mo</li>
-          <li>.NET Framework 4.7.2 ou version ultérieure (inclut dans Windows 10)</li>
-          <li>Administrateur requis pour l'installation</li>
-        </ul>
-      </section>
-
-      <section className="bg-white rounded-lg p-6 mb-8 shadow">
-        <h2 className="text-xl font-semibold text-gray-900 mb-4">
-          Instructions d'installation
-        </h2>
-        <ol className="list-decimal pl-5 text-gray-600 text-sm">
-          <li>Télécharger l'installeur ci-dessous</li>
-          <li>Exécuter le fichier .exe téléchargé</li>
-          <li>Suivre les instructions de l'assistant d'installation</li>
-          <li>Choisir le dossier d'installation</li>
-          <li>Lancer TENΛ Budget depuis le menu Démarrer ou le raccourci créé sur le bureau</li>
-        </ol>
-      </section>
-
-      <section className="bg-white rounded-lg p-6 mb-8 shadow">
-        <h2 className="text-xl font-semibold text-gray-900 mb-4">
-          Notes de version et sécurité
-        </h2>
-        <ul className="space-y-2 text-gray-600 text-sm">
-          <li>
-            L'application utilise Electron pour l'interface desktop et stocke les données
-            localement via IndexedDB (Dexie.js). Aucune donnée n'est envoyée vers des serveurs
-            tiers sans votre consentement.
-          </li>
-          <li>
-            L'application est signé sous respect des lignes directrices de sécurité Microsoft.
-            Vérifiez l'empreinte SHA-256 après le téléchargement pour vous assurer de l'intégrité
-            du fichier.
-          </li>
-        </ul>
-      </section>
-
-      <div className="mt-8">
-        <h2 className="text-xl font-semibold text-gray-900 mb-4">
-          Téléchargement
-        </h2>
-        <p className="text-gray-600 mb-4">
-          L'installateur n'est pas encore disponible au téléchargement public. Une fois l'installateur
-          Build et hébergé, ce bouton deviendra actif.
+      <section style={{ background: '#141416', border: '1px solid #2a2a30', borderRadius: 14, padding: 20 }}>
+        <h2 style={{ fontSize: 18, margin: '0 0 8px' }}>Sécurité des téléchargements (quand disponibles)</h2>
+        <p style={{ color: '#a0a0ab', margin: 0, lineHeight: 1.6 }}>
+          Les binaires publiés devront indiquer version, date, empreinte SHA-256 et canal officiel.
+          Aucun téléchargement n’est activé sur cette page pour l’instant.
         </p>
-      </div>
+      </section>
     </main>
   );
 }

@@ -1,14 +1,17 @@
 
 'use client';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
-import { useState } from 'react';
+import { usePathname, useRouter } from 'next/navigation';
+import { useEffect, useState } from 'react';
+import { isLocalVaultUnlocked } from '@/lib/tena-core-shims';
+import { getLocalVaultStatus } from '@/lib/tena-core-dexie';
 
 const links = [
   { href: '/onboarding', label: 'Onboarding', icon: '📝', desc: 'Questionnaire et profil local' },
   { href: '/dashboard', label: 'Tableau de bord', icon: '📊', desc: 'Budget prévu vs dépensé vs restant Int' },
   { href: '/budgets', label: 'Budgets', icon: '💰', desc: 'Annuels/mensuels Int centimes' },
   { href: '/transactions', label: 'Transactions', icon: '💳', desc: 'Liées personne, soft delete' },
+  { href: '/import', label: 'Importer', icon: '📥', desc: 'Relevé CSV ou XLSX, localement' },
   { href: '/recurrentes', label: 'Récurrentes', icon: '🔁', desc: 'Hebdo/mensuel, pending_validation' },
   { href: '/objectifs', label: 'Objectifs', icon: '🎯', desc: 'targetCents Int, progression % Int' },
   { href: '/famille', label: 'Famille', icon: '👨‍👩‍👧‍👦', desc: 'Roles + invitations + 3 appareils' },
@@ -22,6 +25,19 @@ const links = [
 export function ResponsiveNav() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const pathname = usePathname();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (pathname === '/' || pathname === '/onboarding') return;
+    let active = true;
+    void getLocalVaultStatus().then((status) => {
+      if (active && status.configured && !isLocalVaultUnlocked()) router.replace('/onboarding');
+    }).catch(() => undefined);
+    return () => { active = false; };
+  }, [pathname, router]);
+
+  // La page vitrine reste indépendante de la navigation de l'application.
+  if (pathname === '/') return null;
 
   return (
     <>
@@ -125,6 +141,9 @@ export function ResponsiveNav() {
         @media (min-width: 769px) {
           .sidebar {
             transform: translateX(0) !important;
+          }
+          main {
+            margin-left: 260px !important;
           }
         }
       `}</style>

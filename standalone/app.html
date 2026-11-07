@@ -1,0 +1,944 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TENΛ Budget — Espace Personnel</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%2309090b'/><path d='M30 75 L50 25 L70 75 L58 75 L50 50 L42 75 Z' fill='%23d4af37'/></svg>">
+  <style>
+    :root {
+      --bg: #09090b;
+      --sidebar-bg: #0d0d10;
+      --card-bg: #131317;
+      --card-border: #23232b;
+      --gold: #d4af37;
+      --gold-light: #f3df8a;
+      --gold-glow: rgba(212, 175, 55, 0.2);
+      --text: #f5f5f7;
+      --text-muted: #9e9ea7;
+      --emerald: #10b981;
+      --emerald-bg: rgba(16, 185, 129, 0.12);
+      --rose: #f43f5e;
+      --rose-bg: rgba(244, 63, 94, 0.12);
+      --radius: 14px;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', Roboto, sans-serif;
+      display: flex; height: 100vh; overflow: hidden;
+    }
+
+    /* Sidebar */
+    aside {
+      width: 260px; background: var(--sidebar-bg);
+      border-right: 1px solid var(--card-border);
+      display: flex; flex-direction: column;
+      flex-shrink: 0;
+    }
+    .brand {
+      padding: 24px; display: flex; align-items: center; gap: 12px;
+      font-weight: 800; font-size: 17px; letter-spacing: 2px;
+      color: var(--gold-light); border-bottom: 1px solid var(--card-border);
+    }
+    .logo-badge {
+      width: 34px; height: 34px;
+      background: linear-gradient(135deg, #2a2312, #18150c);
+      border: 1px solid var(--gold); border-radius: 9px;
+      display: flex; align-items: center; justify-content: center;
+      color: var(--gold); font-weight: 900;
+    }
+    .menu { padding: 18px 12px; flex: 1; display: flex; flex-direction: column; gap: 4px; overflow-y: auto; }
+    .menu-item {
+      display: flex; align-items: center; gap: 14px;
+      padding: 12px 16px; border-radius: 10px; font-size: 14px; font-weight: 600;
+      color: var(--text-muted); cursor: pointer; transition: all 0.2s;
+    }
+    .menu-item:hover { background: rgba(255, 255, 255, 0.04); color: #fff; }
+    .menu-item.active {
+      background: rgba(212, 175, 55, 0.12); color: var(--gold-light);
+      border: 1px solid rgba(212, 175, 55, 0.3);
+    }
+    .menu-item .icon { font-size: 18px; width: 22px; text-align: center; }
+    .sidebar-footer {
+      padding: 16px 20px; border-top: 1px solid var(--card-border);
+      font-size: 12px; color: var(--text-muted);
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--emerald); display: inline-block; }
+
+    /* Main Content */
+    main {
+      flex: 1; display: flex; flex-direction: column; overflow-y: auto;
+      background: radial-gradient(ellipse at 80% 0%, rgba(212, 175, 55, 0.05) 0%, transparent 40%), var(--bg);
+    }
+    header.top-bar {
+      padding: 20px 32px; border-bottom: 1px solid var(--card-border);
+      display: flex; justify-content: space-between; align-items: center;
+      background: rgba(9, 9, 11, 0.7); backdrop-filter: blur(10px);
+      position: sticky; top: 0; z-index: 20;
+    }
+    .page-title { font-size: 22px; font-weight: 800; }
+    .top-actions { display: flex; gap: 12px; align-items: center; }
+    .btn {
+      padding: 9px 18px; border-radius: 9px; font-size: 13px; font-weight: 600;
+      cursor: pointer; border: none; display: inline-flex; align-items: center; gap: 8px;
+      transition: all 0.2s;
+    }
+    .btn-gold {
+      background: linear-gradient(135deg, var(--gold-light), var(--gold));
+      color: #09090b; font-weight: 700;
+    }
+    .btn-gold:hover { transform: translateY(-1px); box-shadow: 0 4px 16px var(--gold-glow); }
+    .btn-secondary {
+      background: rgba(255, 255, 255, 0.05); color: var(--text);
+      border: 1px solid var(--card-border);
+    }
+    .btn-secondary:hover { background: rgba(255, 255, 255, 0.08); border-color: #444; }
+
+    /* Contenu scrollable */
+    .content { padding: 32px; max-width: 1300px; }
+
+    /* Grille de cartes */
+    .grid-4 {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 18px; margin-bottom: 28px;
+    }
+    .stat-card {
+      background: var(--card-bg); border: 1px solid var(--card-border);
+      border-radius: var(--radius); padding: 22px; position: relative;
+    }
+    .stat-card.accent {
+      border-color: rgba(212, 175, 55, 0.35);
+      background: linear-gradient(135deg, rgba(212, 175, 55, 0.08), var(--card-bg));
+    }
+    .stat-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+    .stat-title { font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted); font-weight: 700; }
+    .stat-amount { font-size: 28px; font-weight: 850; letter-spacing: -0.5px; }
+    .income-text { color: var(--emerald); }
+    .expense-text { color: var(--rose); }
+    .gold-text { color: var(--gold-light); }
+
+    /* Deux colonnes */
+    .grid-2 {
+      display: grid; grid-template-columns: 2fr 1fr; gap: 24px; margin-bottom: 28px;
+    }
+    @media (max-width: 1024px) {
+      .grid-2 { grid-template-columns: 1fr; }
+    }
+    .panel {
+      background: var(--card-bg); border: 1px solid var(--card-border);
+      border-radius: var(--radius); padding: 24px;
+    }
+    .panel-header {
+      display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;
+    }
+    .panel-title { font-size: 16px; font-weight: 700; }
+
+    /* Chart SVG */
+    .chart-container {
+      width: 100%; height: 200px; display: flex; align-items: flex-end; gap: 10px;
+      padding-top: 20px; border-bottom: 1px solid var(--card-border);
+    }
+    .bar-col {
+      flex: 1; display: flex; flex-direction: column; align-items: center; gap: 8px; height: 100%;
+      justify-content: flex-end;
+    }
+    .bar {
+      width: 100%; min-height: 4px; border-radius: 4px 4px 0 0;
+      background: linear-gradient(180deg, var(--gold-light), var(--gold));
+      transition: height 0.3s;
+    }
+    .bar-label { font-size: 10px; color: var(--text-muted); }
+
+    /* Progress Items (Budgets) */
+    .budget-item { margin-bottom: 18px; }
+    .budget-meta { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 6px; }
+    .budget-bar-bg { width: 100%; height: 8px; background: rgba(255, 255, 255, 0.06); border-radius: 4px; overflow: hidden; }
+    .budget-bar-fill { height: 100%; border-radius: 4px; background: var(--gold); }
+    .budget-bar-fill.warning { background: #f59e0b; }
+    .budget-bar-fill.danger { background: var(--rose); }
+
+    /* Table Transactions */
+    table { width: 100%; border-collapse: collapse; text-align: left; font-size: 13px; }
+    th {
+      padding: 12px 16px; color: var(--text-muted); font-size: 11px;
+      text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid var(--card-border);
+    }
+    td { padding: 14px 16px; border-bottom: 1px solid rgba(255, 255, 255, 0.04); vertical-align: middle; }
+    tr:hover td { background: rgba(255, 255, 255, 0.02); }
+    .badge {
+      display: inline-block; padding: 4px 8px; border-radius: 6px; font-size: 11px; font-weight: 600;
+    }
+    .badge-income { background: var(--emerald-bg); color: var(--emerald); }
+    .badge-expense { background: var(--rose-bg); color: var(--rose); }
+    .badge-transfer { background: rgba(212, 175, 55, 0.15); color: var(--gold); }
+
+    /* Modal Dialog */
+    .modal-overlay {
+      position: fixed; inset: 0; background: rgba(0, 0, 0, 0.75); backdrop-filter: blur(6px);
+      display: none; align-items: center; justify-content: center; z-index: 1000;
+    }
+    .modal-overlay.open { display: flex; }
+    .modal {
+      background: #141418; border: 1px solid var(--card-border);
+      border-radius: 18px; width: min(520px, 94%); padding: 28px;
+      box-shadow: 0 25px 60px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(212, 175, 55, 0.2);
+    }
+    .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+    .modal-title { font-size: 18px; font-weight: 700; }
+    .form-group { margin-bottom: 16px; }
+    .form-group label { display: block; font-size: 12px; font-weight: 600; color: var(--text-muted); margin-bottom: 6px; }
+    .form-control {
+      width: 100%; padding: 11px 14px; background: rgba(255, 255, 255, 0.04);
+      border: 1px solid var(--card-border); border-radius: 8px; color: #fff;
+      font-size: 14px; outline: none; transition: border-color 0.2s;
+    }
+    .form-control:focus { border-color: var(--gold); }
+    .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+
+    /* Onboarding Overlay */
+    .onboarding-screen {
+      position: fixed; inset: 0; background: var(--bg); z-index: 2000;
+      display: none; align-items: center; justify-content: center; padding: 24px;
+    }
+    .onboarding-screen.open { display: flex; }
+    .onboarding-box {
+      max-width: 580px; width: 100%; background: var(--card-bg);
+      border: 1px solid rgba(212, 175, 55, 0.3); border-radius: 20px;
+      padding: 36px; box-shadow: 0 30px 90px rgba(0, 0, 0, 0.9);
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Sidebar -->
+  <aside>
+    <div class="brand">
+      <div class="logo-badge">Λ</div>
+      <span>TENΛ BUDGET</span>
+    </div>
+    <div class="menu">
+      <div class="menu-item active" onclick="switchTab('dashboard')">
+        <span class="icon">📊</span> Tableau de bord
+      </div>
+      <div class="menu-item" onclick="switchTab('transactions')">
+        <span class="icon">💳</span> Transactions
+      </div>
+      <div class="menu-item" onclick="switchTab('budgets')">
+        <span class="icon">🎯</span> Budgets & Catégories
+      </div>
+      <div class="menu-item" onclick="switchTab('goals')">
+        <span class="icon">🏆</span> Objectifs d'épargne
+      </div>
+      <div class="menu-item" onclick="switchTab('import')">
+        <span class="icon">📥</span> Import / Export CSV
+      </div>
+      <div class="menu-item" onclick="switchTab('settings')">
+        <span class="icon">⚙️</span> Paramètres & Sécurité
+      </div>
+    </div>
+    <div class="sidebar-footer">
+      <div><span class="status-dot"></span> Stockage local chiffré</div>
+      <a href="/" target="_blank" style="color: var(--gold); text-decoration: none;">Site ↗</a>
+    </div>
+  </aside>
+
+  <!-- Main Content -->
+  <main>
+    <header class="top-bar">
+      <div class="page-title" id="pageTitle">Tableau de bord</div>
+      <div class="top-actions">
+        <button class="btn btn-secondary" onclick="exportCsv()">📤 Exporter CSV</button>
+        <button class="btn btn-gold" onclick="openAddModal()">＋ Nouvelle transaction</button>
+      </div>
+    </header>
+
+    <div class="content" id="tabContent">
+      <!-- Le contenu dynamique est injecté par JavaScript -->
+    </div>
+  </main>
+
+  <!-- Modal Ajout Transaction -->
+  <div class="modal-overlay" id="txModal">
+    <div class="modal">
+      <div class="modal-header">
+        <div class="modal-title">Ajouter une transaction</div>
+        <button class="btn btn-secondary" style="padding: 4px 10px;" onclick="closeModal()">✕</button>
+      </div>
+      <form onsubmit="handleSaveTx(event)">
+        <div class="form-row">
+          <div class="form-group">
+            <label>Type</label>
+            <select class="form-control" id="txType" onchange="updateCategories()">
+              <option value="expense">Dépense (-)</option>
+              <option value="income">Revenu (+)</option>
+              <option value="transfer">Virement interne (⇄)</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Montant (€)</label>
+            <input type="number" step="0.01" class="form-control" id="txAmount" required placeholder="0.00">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Catégorie</label>
+            <select class="form-control" id="txCategory"></select>
+          </div>
+          <div class="form-group">
+            <label>Date</label>
+            <input type="date" class="form-control" id="txDate" required>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Libellé / Description</label>
+          <input type="text" class="form-control" id="txLabel" required placeholder="Ex: Courses Bio, Salaire, Restaurant">
+        </div>
+        <div class="form-group">
+          <label>Note libre (optionnel)</label>
+          <input type="text" class="form-control" id="txNotes" placeholder="Détails supplémentaires">
+        </div>
+        <div style="display: flex; justify-content: flex-end; gap: 12px; margin-top: 24px;">
+          <button type="button" class="btn btn-secondary" onclick="closeModal()">Annuler</button>
+          <button type="submit" class="btn btn-gold">Enregistrer</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Écran Questionnaire Onboarding Initial -->
+  <div class="onboarding-screen" id="onboardingScreen">
+    <div class="onboarding-box">
+      <div style="text-align: center; margin-bottom: 24px;">
+        <div class="logo-badge" style="margin: 0 auto 14px; width: 44px; height: 44px; font-size: 22px;">Λ</div>
+        <h2 style="font-size: 24px; font-weight: 800;">Bienvenue dans TENΛ Budget</h2>
+        <p style="color: var(--text-muted); font-size: 14px; margin-top: 6px;">
+          Votre espace financier personnel 100% local, sans compte distant et sans serveur.
+        </p>
+      </div>
+
+      <div class="form-group">
+        <label>Votre cadre de gestion :</label>
+        <select class="form-control" id="obHousehold">
+          <option value="personal">Gestion individuelle (solo)</option>
+          <option value="couple">Gestion en couple</option>
+          <option value="family">Foyer familial</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Régularité de vos revenus :</label>
+        <select class="form-control" id="obIncome">
+          <option value="regular">Réguliers (salarié, pension)</option>
+          <option value="variable">Variables (indépendant, freelance)</option>
+          <option value="mixed">Mixtes</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Votre priorité absolue :</label>
+        <select class="form-control" id="obPriority">
+          <option value="control">Mieux contrôler mes dépenses quotidiennes</option>
+          <option value="save">Épargner pour financer des projets</option>
+          <option value="understand">Comprendre précisément où part mon argent</option>
+        </select>
+      </div>
+
+      <div style="background: rgba(212,175,55,0.08); padding: 14px; border-radius: 10px; border: 1px solid rgba(212,175,55,0.25); font-size: 13px; margin: 20px 0; color: #e8cc6a;">
+        🔒 <b>Engagement souverain :</b> Vos réponses et vos transactions restent exclusivement sur cet appareil dans votre navigateur.
+      </div>
+
+      <button class="btn btn-gold" style="width: 100%; justify-content: center; padding: 14px;" onclick="completeOnboarding()">
+        Créer mon coffre local sécurisé →
+      </button>
+    </div>
+  </div>
+
+  <script>
+    // État de l'application persistant (Local-First)
+    const STORAGE_KEY = 'tena_budget_data_v1';
+    
+    const defaultCategories = {
+      expense: ['Alimentation', 'Logement', 'Transports', 'Loisirs & Sorties', 'Santé', 'Abonnements', 'Autre'],
+      income: ['Salaire', 'Primes & Bonus', 'Remboursements', 'Revenus passifs', 'Autre'],
+      transfer: ['Virement épargne', 'Compte joint', 'Autre']
+    };
+
+    let appData = {
+      profile: null,
+      transactions: [],
+      budgets: [
+        { category: 'Alimentation', limit: 450 },
+        { category: 'Logement', limit: 850 },
+        { category: 'Loisirs & Sorties', limit: 200 },
+        { category: 'Abonnements', limit: 80 }
+      ],
+      goals: [
+        { id: 'g1', name: 'Fonds d’urgence', target: 5000, current: 3200, date: '2026-12-31' },
+        { id: 'g2', name: 'Voyage d’été', target: 1800, current: 850, date: '2027-06-30' }
+      ]
+    };
+
+    // Chargement initial
+    function loadData() {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) {
+        try {
+          appData = JSON.parse(saved);
+        } catch (e) { console.error('Erreur lecture données locales', e); }
+      } else {
+        // Données d'exemple bienveillantes pour un premier rendu immédiat
+        const now = new Date();
+        const y = now.getFullYear();
+        const m = String(now.getMonth() + 1).padStart(2, '0');
+        appData.transactions = [
+          { id: 'tx1', type: 'income', amount: 2850.00, category: 'Salaire', label: 'Virement employeur principal', date: `${y}-${m}-01`, notes: 'Salaire mensuel' },
+          { id: 'tx2', type: 'expense', amount: 820.00, category: 'Logement', label: 'Loyer appartement', date: `${y}-${m}-02`, notes: 'Prélèvement automatique' },
+          { id: 'tx3', type: 'expense', amount: 64.50, category: 'Alimentation', label: 'Courses hebdomadaires Bio', date: `${y}-${m}-04`, notes: '' },
+          { id: 'tx4', type: 'expense', amount: 39.99, category: 'Abonnements', label: 'Forfait Box Fibre & Mobile', date: `${y}-${m}-05`, notes: '' },
+          { id: 'tx5', type: 'expense', amount: 45.00, category: 'Loisirs & Sorties', label: 'Cinéma & Restaurant', date: `${y}-${m}-07`, notes: '' },
+          { id: 'tx6', type: 'transfer', amount: 300.00, category: 'Virement épargne', label: 'Épargne de précaution', date: `${y}-${m}-08`, notes: '' }
+        ];
+        saveData();
+      }
+    }
+
+    function saveData() {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(appData));
+    }
+
+    // Gestion de l'Onboarding
+    function checkOnboarding() {
+      if (!appData.profile) {
+        document.getElementById('onboardingScreen').classList.add('open');
+      }
+    }
+
+    function completeOnboarding() {
+      appData.profile = {
+        household: document.getElementById('obHousehold').value,
+        income: document.getElementById('obIncome').value,
+        priority: document.getElementById('obPriority').value,
+        createdAt: new Date().toISOString()
+      };
+      saveData();
+      document.getElementById('onboardingScreen').classList.remove('open');
+      renderDashboard();
+    }
+
+    // Rendu dynamique des onglets
+    let currentTab = 'dashboard';
+
+    function switchTab(tab) {
+      currentTab = tab;
+      document.querySelectorAll('.menu-item').forEach(el => el.classList.remove('active'));
+      event.currentTarget.classList.add('active');
+
+      const titleMap = {
+        dashboard: 'Tableau de bord',
+        transactions: 'Historique des transactions',
+        budgets: 'Enveloppes & Plafonds de budget',
+        goals: 'Objectifs d’épargne & Projets',
+        import: 'Importation & Exportation CSV',
+        settings: 'Paramètres & Coffre-fort local'
+      };
+      document.getElementById('pageTitle').innerText = titleMap[tab] || 'TENΛ Budget';
+
+      if (tab === 'dashboard') renderDashboard();
+      else if (tab === 'transactions') renderTransactions();
+      else if (tab === 'budgets') renderBudgets();
+      else if (tab === 'goals') renderGoals();
+      else if (tab === 'import') renderImportExport();
+      else if (tab === 'settings') renderSettings();
+    }
+
+    // TABLEAU DE BORD
+    function renderDashboard() {
+      const income = appData.transactions.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0);
+      const expense = appData.transactions.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
+      const balance = income - expense;
+      const savings = appData.goals.reduce((s, g) => s + g.current, 0);
+
+      let html = `
+        <div class="grid-4">
+          <div class="stat-card accent">
+            <div class="stat-header"><span class="stat-title">Solde Net</span><span style="color: var(--gold);">🏛</span></div>
+            <div class="stat-amount gold-text">${formatMoney(balance)}</div>
+            <div style="font-size: 12px; color: var(--text-muted); margin-top: 6px;">Total disponible calculé</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-header"><span class="stat-title">Revenus</span><span style="color: var(--emerald);">↑</span></div>
+            <div class="stat-amount income-text">+${formatMoney(income)}</div>
+            <div style="font-size: 12px; color: var(--text-muted); margin-top: 6px;">${appData.transactions.filter(t => t.type === 'income').length} rentrées d'argent</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-header"><span class="stat-title">Dépenses</span><span style="color: var(--rose);">↓</span></div>
+            <div class="stat-amount expense-text">-${formatMoney(expense)}</div>
+            <div style="font-size: 12px; color: var(--text-muted); margin-top: 6px;">${appData.transactions.filter(t => t.type === 'expense').length} débits enregistrés</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-header"><span class="stat-title">Épargne Consolidée</span><span style="color: var(--gold-light);">🏆</span></div>
+            <div class="stat-amount gold-text">${formatMoney(savings)}</div>
+            <div style="font-size: 12px; color: var(--text-muted); margin-top: 6px;">Sur ${appData.goals.length} projets actifs</div>
+          </div>
+        </div>
+
+        <div class="grid-2">
+          <!-- Graphique dépenses -->
+          <div class="panel">
+            <div class="panel-header">
+              <div class="panel-title">Rythme des dépenses récentes</div>
+              <span style="font-size: 12px; color: var(--gold);">Vue journalière</span>
+            </div>
+            <div class="chart-container" id="chartArea">
+              ${renderBars()}
+            </div>
+          </div>
+
+          <!-- Alertes & Enveloppes budgétaires -->
+          <div class="panel">
+            <div class="panel-header">
+              <div class="panel-title">Budgets du mois</div>
+              <a href="javascript:void(0)" onclick="switchTabDirect('budgets')" style="font-size: 12px; color: var(--gold);">Gérer →</a>
+            </div>
+            <div>
+              ${renderBudgetProgress(expense)}
+            </div>
+          </div>
+        </div>
+
+        <!-- Dernières transactions -->
+        <div class="panel">
+          <div class="panel-header">
+            <div class="panel-title">Dernières opérations</div>
+            <a href="javascript:void(0)" onclick="switchTabDirect('transactions')" style="font-size: 12px; color: var(--gold);">Voir tout (${appData.transactions.length}) →</a>
+          </div>
+          <table>
+            <thead>
+              <tr>
+                <th>Date</th><th>Libellé</th><th>Catégorie</th><th>Type</th><th>Montant</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${renderRecentRows()}
+            </tbody>
+          </table>
+        </div>
+      `;
+      document.getElementById('tabContent').innerHTML = html;
+    }
+
+    function renderBars() {
+      const expenses = appData.transactions.filter(t => t.type === 'expense').slice(-7);
+      if (expenses.length === 0) return '<div style="color: var(--text-muted); padding: 40px; text-align: center; width: 100%;">Aucune dépense récente</div>';
+      const max = Math.max(...expenses.map(e => e.amount), 50);
+      return expenses.map(e => {
+        const h = Math.max((e.amount / max) * 100, 8);
+        const day = e.date.split('-').slice(1).join('/');
+        return `
+          <div class="bar-col" title="${e.label} : ${e.amount} €">
+            <div class="bar" style="height: ${h}%;"></div>
+            <span class="bar-label">${day}</span>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function renderBudgetProgress() {
+      return appData.budgets.map(b => {
+        const spent = appData.transactions
+          .filter(t => t.type === 'expense' && t.category === b.category)
+          .reduce((s, t) => s + t.amount, 0);
+        const pct = Math.min(Math.round((spent / b.limit) * 100), 100);
+        const statusClass = pct > 90 ? 'danger' : (pct > 75 ? 'warning' : '');
+        return `
+          <div class="budget-item">
+            <div class="budget-meta">
+              <span><b>${b.category}</b></span>
+              <span style="color: var(--text-muted);">${formatMoney(spent)} / ${formatMoney(b.limit)} (${pct}%)</span>
+            </div>
+            <div class="budget-bar-bg">
+              <div class="budget-bar-fill ${statusClass}" style="width: ${pct}%;"></div>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function renderRecentRows() {
+      return appData.transactions.slice(-6).reverse().map(t => `
+        <tr>
+          <td>${t.date}</td>
+          <td><b>${escapeHtml(t.label)}</b></td>
+          <td>${t.category}</td>
+          <td><span class="badge badge-${t.type}">${t.type === 'income' ? 'Revenu' : (t.type === 'expense' ? 'Dépense' : 'Virement')}</span></td>
+          <td style="font-weight: 700; color: ${t.type === 'income' ? 'var(--emerald)' : (t.type === 'expense' ? 'var(--rose)' : 'var(--gold)')};">
+            ${t.type === 'income' ? '+' : (t.type === 'expense' ? '-' : '')}${formatMoney(t.amount)}
+          </td>
+        </tr>
+      `).join('');
+    }
+
+    // TRANSACTIONS
+    function renderTransactions() {
+      let html = `
+        <div class="panel">
+          <div class="panel-header">
+            <div class="panel-title">Historique des opérations (${appData.transactions.length})</div>
+            <input type="text" id="searchFilter" class="form-control" placeholder="Rechercher une transaction…" style="width: 260px;" oninput="filterTransactions()">
+          </div>
+          <table>
+            <thead>
+              <tr>
+                <th>Date</th><th>Libellé</th><th>Catégorie</th><th>Type</th><th>Montant</th><th>Note</th><th>Action</th>
+              </tr>
+            </thead>
+            <tbody id="txTableBody">
+              ${renderAllTxRows()}
+            </tbody>
+          </table>
+        </div>
+      `;
+      document.getElementById('tabContent').innerHTML = html;
+    }
+
+    function renderAllTxRows(filteredList) {
+      const list = filteredList || [...appData.transactions].reverse();
+      if (list.length === 0) return '<tr><td colspan="7" style="text-align: center; color: var(--text-muted); padding: 30px;">Aucune transaction enregistrée</td></tr>';
+      return list.map(t => `
+        <tr>
+          <td>${t.date}</td>
+          <td><b>${escapeHtml(t.label)}</b></td>
+          <td>${t.category}</td>
+          <td><span class="badge badge-${t.type}">${t.type === 'income' ? 'Revenu' : (t.type === 'expense' ? 'Dépense' : 'Virement')}</span></td>
+          <td style="font-weight: 700; color: ${t.type === 'income' ? 'var(--emerald)' : (t.type === 'expense' ? 'var(--rose)' : 'var(--gold)')};">
+            ${t.type === 'income' ? '+' : (t.type === 'expense' ? '-' : '')}${formatMoney(t.amount)}
+          </td>
+          <td style="color: var(--text-muted); font-size: 12px;">${escapeHtml(t.notes || '—')}</td>
+          <td>
+            <button class="btn btn-secondary" style="padding: 4px 8px; font-size: 11px; color: var(--rose);" onclick="deleteTx('${t.id}')">Supprimer</button>
+          </td>
+        </tr>
+      `).join('');
+    }
+
+    function filterTransactions() {
+      const q = document.getElementById('searchFilter').value.toLowerCase();
+      const filtered = appData.transactions.filter(t => 
+        t.label.toLowerCase().includes(q) || 
+        t.category.toLowerCase().includes(q) || 
+        (t.notes && t.notes.toLowerCase().includes(q))
+      ).reverse();
+      document.getElementById('txTableBody').innerHTML = renderAllTxRows(filtered);
+    }
+
+    function deleteTx(id) {
+      if (confirm('Voulez-vous supprimer cette transaction de votre historique local ?')) {
+        appData.transactions = appData.transactions.filter(t => t.id !== id);
+        saveData();
+        renderTransactions();
+      }
+    }
+
+    // BUDGETS
+    function renderBudgets() {
+      let html = `
+        <div class="panel" style="margin-bottom: 24px;">
+          <div class="panel-header">
+            <div class="panel-title">Vos enveloppes budgétaires</div>
+            <button class="btn btn-gold" onclick="openAddBudgetModal()">＋ Nouveau budget</button>
+          </div>
+          <div class="grid-3" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px;">
+            ${appData.budgets.map(b => {
+              const spent = appData.transactions
+                .filter(t => t.type === 'expense' && t.category === b.category)
+                .reduce((s, t) => s + t.amount, 0);
+              const remaining = b.limit - spent;
+              const pct = Math.min(Math.round((spent / b.limit) * 100), 100);
+              return `
+                <div class="stat-card">
+                  <div class="stat-header">
+                    <span class="stat-title">${b.category}</span>
+                    <button class="btn btn-secondary" style="padding: 2px 6px; font-size: 10px;" onclick="deleteBudget('${b.category}')">✕</button>
+                  </div>
+                  <div class="stat-amount" style="font-size: 22px;">${formatMoney(spent)} <span style="font-size: 14px; color: var(--text-muted);">/ ${formatMoney(b.limit)}</span></div>
+                  <div class="budget-bar-bg" style="margin: 12px 0 8px;">
+                    <div class="budget-bar-fill ${pct > 90 ? 'danger' : (pct > 75 ? 'warning' : '')}" style="width: ${pct}%;"></div>
+                  </div>
+                  <div style="font-size: 12px; color: ${remaining >= 0 ? 'var(--emerald)' : 'var(--rose)'};">
+                    ${remaining >= 0 ? 'Reste disponible : ' + formatMoney(remaining) : 'Dépassement de ' + formatMoney(Math.abs(remaining))}
+                  </div>
+                </div>
+              `;
+            }).join('')}
+          </div>
+        </div>
+      `;
+      document.getElementById('tabContent').innerHTML = html;
+    }
+
+    function openAddBudgetModal() {
+      const cat = prompt('Nom de la catégorie (ex: Santé, Cadeaux, Vacances) :');
+      if (!cat) return;
+      const limit = parseFloat(prompt('Plafond mensuel en euros (€) :'));
+      if (isNaN(limit) || limit <= 0) return alert('Montant invalide');
+      appData.budgets.push({ category: cat, limit: limit });
+      saveData();
+      renderBudgets();
+    }
+
+    function deleteBudget(category) {
+      if (confirm(`Supprimer le budget pour ${category} ?`)) {
+        appData.budgets = appData.budgets.filter(b => b.category !== category);
+        saveData();
+        renderBudgets();
+      }
+    }
+
+    // OBJECTIFS D'ÉPARGNE
+    function renderGoals() {
+      let html = `
+        <div class="panel">
+          <div class="panel-header">
+            <div class="panel-title">Projets d'épargne (${appData.goals.length})</div>
+            <button class="btn btn-gold" onclick="openAddGoalModal()">＋ Nouveau projet</button>
+          </div>
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 18px;">
+            ${appData.goals.map(g => {
+              const pct = Math.min(Math.round((g.current / g.target) * 100), 100);
+              const remaining = g.target - g.current;
+              return `
+                <div class="stat-card accent">
+                  <div class="stat-header">
+                    <span class="stat-title">${escapeHtml(g.name)}</span>
+                    <span style="font-size: 12px; color: var(--gold);">Échéance: ${g.date}</span>
+                  </div>
+                  <div class="stat-amount gold-text">${formatMoney(g.current)} <span style="font-size: 15px; color: var(--text-muted);">/ ${formatMoney(g.target)}</span></div>
+                  <div class="budget-bar-bg" style="margin: 14px 0 8px;">
+                    <div class="budget-bar-fill" style="width: ${pct}%;"></div>
+                  </div>
+                  <div style="display: flex; justify-content: space-between; font-size: 12px; color: var(--text-muted);">
+                    <span>${pct}% financé</span>
+                    <span>Reste à épargner : ${formatMoney(remaining)}</span>
+                  </div>
+                  <div style="margin-top: 16px; display: flex; gap: 8px;">
+                    <button class="btn btn-gold" style="flex: 1; padding: 6px; font-size: 12px;" onclick="addContribution('${g.id}')">＋ Verser</button>
+                    <button class="btn btn-secondary" style="padding: 6px 10px; font-size: 12px; color: var(--rose);" onclick="deleteGoal('${g.id}')">Supprimer</button>
+                  </div>
+                </div>
+              `;
+            }).join('')}
+          </div>
+        </div>
+      `;
+      document.getElementById('tabContent').innerHTML = html;
+    }
+
+    function openAddGoalModal() {
+      const name = prompt('Nom du projet (ex: Achat Vélo, Vacances Grèce, Ordinateur) :');
+      if (!name) return;
+      const target = parseFloat(prompt('Montant cible en euros (€) :'));
+      if (isNaN(target) || target <= 0) return alert('Montant cible invalide');
+      const date = prompt('Date butoir souhaitée (AAAA-MM-JJ) :', '2027-12-31');
+      appData.goals.push({ id: 'g_' + Date.now(), name, target, current: 0, date: date || '2027-12-31' });
+      saveData();
+      renderGoals();
+    }
+
+    function addContribution(id) {
+      const g = appData.goals.find(x => x.id === id);
+      if (!g) return;
+      const amount = parseFloat(prompt(`Montant à ajouter au projet "${g.name}" :`));
+      if (isNaN(amount) || amount <= 0) return alert('Montant invalide');
+      g.current += amount;
+      saveData();
+      renderGoals();
+    }
+
+    function deleteGoal(id) {
+      if (confirm('Supprimer cet objectif d\'épargne ?')) {
+        appData.goals = appData.goals.filter(g => g.id !== id);
+        saveData();
+        renderGoals();
+      }
+    }
+
+    // IMPORT / EXPORT CSV
+    function renderImportExport() {
+      let html = `
+        <div class="grid-2">
+          <div class="panel">
+            <div class="panel-header"><div class="panel-title">📤 Exporter mes données</div></div>
+            <p style="color: var(--text-muted); font-size: 14px; margin-bottom: 20px;">
+              Téléchargez un fichier CSV contenant l'intégralité de vos transactions. Compatible avec Excel, Numbers, LibreOffice et Google Sheets.
+            </p>
+            <button class="btn btn-gold" onclick="exportCsv()">Télécharger le fichier CSV (.csv)</button>
+          </div>
+
+          <div class="panel">
+            <div class="panel-header"><div class="panel-title">📥 Importer un relevé CSV</div></div>
+            <p style="color: var(--text-muted); font-size: 14px; margin-bottom: 20px;">
+              Sélectionnez un fichier CSV exporté depuis votre banque ou votre tableur.
+            </p>
+            <input type="file" id="csvFileInput" accept=".csv" class="form-control" style="margin-bottom: 16px;">
+            <button class="btn btn-secondary" onclick="handleImportFile()">Importer et ajouter à l'historique</button>
+          </div>
+        </div>
+      `;
+      document.getElementById('tabContent').innerHTML = html;
+    }
+
+    function exportCsv() {
+      let csv = 'id,type,amount,category,label,date,notes\n';
+      appData.transactions.forEach(t => {
+        csv += `"${t.id}","${t.type}","${t.amount.toFixed(2)}","${t.category}","${t.label.replace(/"/g, '""')}","${t.date}","${(t.notes || '').replace(/"/g, '""')}"\n`;
+      });
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `tena_budget_${new Date().toISOString().slice(0, 10)}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+
+    function handleImportFile() {
+      const input = document.getElementById('csvFileInput');
+      if (!input.files || input.files.length === 0) return alert('Veuillez sélectionner un fichier .csv');
+      const file = input.files[0];
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        const text = e.target.result;
+        const lines = text.split('\n');
+        let count = 0;
+        lines.slice(1).forEach((line, idx) => {
+          if (!line.trim()) return;
+          const cols = line.split(',').map(c => c.replace(/^"|"$/g, '').trim());
+          if (cols.length >= 4) {
+            const amount = parseFloat(cols[2] || cols[1] || '0');
+            if (!isNaN(amount) && amount > 0) {
+              appData.transactions.push({
+                id: 'imp_' + Date.now() + '_' + idx,
+                type: cols[1] || 'expense',
+                amount: amount,
+                category: cols[3] || 'Non catégorisé',
+                label: cols[4] || cols[2] || 'Transaction importée',
+                date: cols[5] || new Date().toISOString().slice(0, 10),
+                notes: 'Import CSV'
+              });
+              count++;
+            }
+          }
+        });
+        saveData();
+        alert(`${count} transactions importées avec succès !`);
+        switchTabDirect('transactions');
+      };
+      reader.readAsText(file);
+    }
+
+    // PARAMÈTRES
+    function renderSettings() {
+      let html = `
+        <div class="panel" style="max-width: 680px;">
+          <div class="panel-header"><div class="panel-title">Paramètres & Sécurité du coffre</div></div>
+          <div style="margin-bottom: 24px; font-size: 14px; color: var(--text-muted);">
+            Profil actuel : <b>${appData.profile ? appData.profile.household : 'Standard'}</b><br>
+            Nombre d'opérations enregistrées : <b>${appData.transactions.length}</b><br>
+            Emplacement : <b>Stockage local navigateur (100% Hors ligne)</b>
+          </div>
+
+          <div style="display: flex; flex-direction: column; gap: 14px;">
+            <button class="btn btn-secondary" onclick="exportBackupJson()">📦 Exporter la sauvegarde complète (JSON)</button>
+            <button class="btn btn-secondary" onclick="document.getElementById('onboardingScreen').classList.add('open')">📝 Relancer le questionnaire d'accueil</button>
+            <button class="btn btn-secondary" style="color: var(--rose);" onclick="resetAllData()">⚠️ Réinitialiser toutes les données locales</button>
+          </div>
+        </div>
+      `;
+      document.getElementById('tabContent').innerHTML = html;
+    }
+
+    function exportBackupJson() {
+      const blob = new Blob([JSON.stringify(appData, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `tena_backup_${Date.now()}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+
+    function resetAllData() {
+      if (confirm('Attention : cette action effacera l\'ensemble de vos transactions et budgets locaux. Continuer ?')) {
+        localStorage.removeItem(STORAGE_KEY);
+        location.reload();
+      }
+    }
+
+    // GESTION DU MODAL D'AJOUT
+    function openAddModal() {
+      document.getElementById('txDate').value = new Date().toISOString().slice(0, 10);
+      updateCategories();
+      document.getElementById('txModal').classList.add('open');
+    }
+
+    function closeModal() {
+      document.getElementById('txModal').classList.remove('open');
+    }
+
+    function updateCategories() {
+      const type = document.getElementById('txType').value;
+      const cats = defaultCategories[type] || defaultCategories.expense;
+      const sel = document.getElementById('txCategory');
+      sel.innerHTML = cats.map(c => `<option value="${c}">${c}</option>`).join('');
+    }
+
+    function handleSaveTx(e) {
+      e.preventDefault();
+      const type = document.getElementById('txType').value;
+      const amount = parseFloat(document.getElementById('txAmount').value);
+      const category = document.getElementById('txCategory').value;
+      const date = document.getElementById('txDate').value;
+      const label = document.getElementById('txLabel').value;
+      const notes = document.getElementById('txNotes').value;
+
+      if (isNaN(amount) || amount <= 0) return alert('Montant invalide');
+
+      appData.transactions.push({
+        id: 'tx_' + Date.now(),
+        type, amount, category, date, label, notes
+      });
+
+      saveData();
+      closeModal();
+      document.getElementById('txAmount').value = '';
+      document.getElementById('txLabel').value = '';
+      document.getElementById('txNotes').value = '';
+
+      if (currentTab === 'dashboard') renderDashboard();
+      else if (currentTab === 'transactions') renderTransactions();
+      else if (currentTab === 'budgets') renderBudgets();
+    }
+
+    function switchTabDirect(tab) {
+      const items = document.querySelectorAll('.menu-item');
+      items.forEach(el => {
+        if (el.getAttribute('onclick').includes(tab)) el.click();
+      });
+    }
+
+    // Helpers
+    function formatMoney(n) {
+      return (Number(n) || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €';
+    }
+    function escapeHtml(str) {
+      return (str || '').replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+    }
+
+    // Démarrage
+    loadData();
+    checkOnboarding();
+    renderDashboard();
+  </script>
+</body>
+</html>

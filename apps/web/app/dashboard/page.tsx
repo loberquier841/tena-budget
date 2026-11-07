@@ -87,7 +87,7 @@ interface StatCardProps {
 function StatCard({ title, value, sub, color, delta }: StatCardProps) {
   return (
     <div
-      style={{{
+      style={{
         background: COLOR_CARD_BG,
         padding: 16,
         borderRadius: 12,
@@ -95,7 +95,7 @@ function StatCard({ title, value, sub, color, delta }: StatCardProps) {
         display: 'flex',
         flexDirection: 'column',
         gap: 6,
-      }}}
+      }}
     >
       <p style={{ fontSize: 11, color: COLOR_TEXT_MUTED, margin: 0, letterSpacing: '0.05em', textTransform: 'uppercase' }}>{title}</p>
       <p style={{ fontSize: 26, fontWeight: 700, color: color || '#111', margin: 0 }}>{value}</p>
@@ -122,7 +122,7 @@ interface EmptyStateProps {
 function EmptyState({ title, description, actionLabel, actionHref, icon = '📭' }: EmptyStateProps) {
   return (
     <div
-      style={{{
+      style={{
         background: COLOR_CARD_BG,
         border: `1px solid ${COLOR_BORDER}`,
         borderRadius: 12,
@@ -132,14 +132,14 @@ function EmptyState({ title, description, actionLabel, actionHref, icon = '📭'
         flexDirection: 'column',
         alignItems: 'center',
         gap: 12,
-      }}}
+      }}
     >
       <span style={{ fontSize: 32 }}>{icon}</span>
       <h3 style={{ fontSize: 16, margin: 0, color: '#111' }}>{title}</h3>
       <p style={{ fontSize: 13, color: COLOR_TEXT_MUTED, margin: 0, maxWidth: 300, lineHeight: 1.5 }}>{description}</p>
       <Link
         href={actionHref}
-        style={{{
+        style={{
           background: COLOR_PRIMARY,
           color: 'white',
           padding: '10px 18px',
@@ -149,7 +149,7 @@ function EmptyState({ title, description, actionLabel, actionHref, icon = '📭'
           fontWeight: 600,
           border: 'none',
           cursor: 'pointer',
-        }}}
+        }}
       >
         {actionLabel}
       </Link>
@@ -169,7 +169,7 @@ function CategoryCard({ name, totalCents, count, color, totalSpentCents }: Categ
   const pct = totalSpentCents ? Math.floor((totalCents * 100) / totalSpentCents) : 0;
   return (
     <div
-      style={{{
+      style={{
         background: COLOR_CARD_BG,
         border: `1px solid ${COLOR_BORDER}`,
         borderRadius: 12,
@@ -177,11 +177,11 @@ function CategoryCard({ name, totalCents, count, color, totalSpentCents }: Categ
         display: 'flex',
         alignItems: 'center',
         gap: 12,
-      }}}
+      }}
     >
       <div style={{ width: 10, height: 10, background: color, borderRadius: 2 }}></div>
       <span style={{ flex: 1, fontSize: 13, color: '#111' }}>{name}</span>
-      <span style={{ fontSize: 13, fontWeight: 600, color: '#111' }}}{fmtEuros(totalCents)}</span>
+      <span style={{ fontSize: 13, fontWeight: 600, color: '#111' }}{fmtEuros(totalCents)}</span>
       <span style={{ fontSize: 11, color: COLOR_TEXT_DIM }}>{count} tx</span>
       <div style={{ width: 70, height: 6, background: '#e5e7eb', borderRadius: 3, overflow: 'hidden' }}>
         <div style={{ width: `${Math.min(pct, 100)}%`, height: '100%', background: color, borderRadius: 3 }}></div>
@@ -222,33 +222,33 @@ function BudgetRow({
     <tr key={id} style={{ borderTop: '1px solid #f3f4f6' }}>
       <td style={{ padding: 12, fontSize: 12 }}>
         <span
-          style={{{
+          style={{
             background: type === 'annual' ? '#ddd6fe' : '#fef3c7',
             color: type === 'annual' ? '#5b21b6' : '#92400e',
             padding: '2px 8px',
             borderRadius: 12,
             fontSize: 10,
             fontWeight: 600,
-          }}}
+          }}
         >
           {type === 'annual' ? 'Annuel' : 'Mensuel'}
         </span>
       </td>
-      <td style={{ padding: 12, fontSize: 12 }}}{year}{month ? `-${String(month).padStart(2, '0')}` : ''}</td>
-      <td style={{ padding: 12, fontSize: 12 }}}{categoryName || '—'}</td>
-      <td style={{ padding: 12, fontSize: 12 }}}{personName || (isGlobal ? 'Famille (global)' : '—')}</td>
+      <td style={{ padding: 12, fontSize: 12 }}{year}{month ? `-${String(month).padStart(2, '0')}` : ''}</td>
+      <td style={{ padding: 12, fontSize: 12 }}{categoryName || '—'}</td>
+      <td style={{ padding: 12, fontSize: 12 }}{personName || (isGlobal ? 'Famille (global)' : '—')}</td>
       <td style={{ padding: 12, fontSize: 12 }}><strong>{fmtEuros(budgetedCents)}</strong></td>
-      <td style={{ padding: 12, fontSize: 12 }}><strong style={{ color: overBudget ? COLOR_ERROR : '#111' }}}{fmtEuros(spentCents)}</strong></td>
-      <td style={{ padding: 12, fontSize: 12 }}><strong style={{ color: remainingCents < 0 ? COLOR_ERROR : '#111' }}}{fmtEuros(remainingCents)}</strong></td>
+      <td style={{ padding: 12, fontSize: 12 }}><strong style={{ color: overBudget ? COLOR_ERROR : '#111' }}{fmtEuros(spentCents)}</strong></td>
+      <td style={{ padding: 12, fontSize: 12 }}><strong style={{ color: remainingCents < 0 ? COLOR_ERROR : '#111' }}{fmtEuros(remainingCents)}</strong></td>
       <td style={{ padding: 12 }}>
         <div style={{ width: '100%', height: 6, background: '#e5e7eb', borderRadius: 3, overflow: 'hidden' }}>
           <div
-            style={{{
+            style={{
               width: `${Math.min(Math.max(pct, 0), 100)}%`,
               height: '100%',
               background: overBudget ? COLOR_ERROR : pct > 80 ? '#f59e0b' : COLOR_SUCCESS,
               borderRadius: 3,
-            }}}
+            }}
           ></div>
         </div>
       </td>
@@ -278,7 +278,7 @@ function GoalCard({
   isExceeded,
 }: GoalCardProps) {
   return (
-    <div key={id} style={{{
+    <div key={id} style={{
       background: COLOR_CARD_BG,
       border: `1px solid ${COLOR_BORDER}`,
       borderRadius: 12,
@@ -286,7 +286,7 @@ function GoalCard({
       display: 'flex',
       flexDirection: 'column',
       gap: 10,
-    }}}>
+    }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
         <h3 style={{ fontSize: 15, margin: 0, color: '#111' }}>{name}</h3>
         {isExceeded && (
@@ -300,12 +300,12 @@ function GoalCard({
       </div>
       <div style={{ width: '100%', height: 8, background: '#e5e7eb', borderRadius: 4, overflow: 'hidden' }}>
         <div
-          style={{{
+          style={{
             width: `${Math.min(percentInt, 100)}%`,
             height: '100%',
             background: isExceeded ? COLOR_SUCCESS : COLOR_PRIMARY,
             borderRadius: 4,
-          }}}
+          }}
         ></div>
       </div>
       <p style={{ fontSize: 11, color: COLOR_TEXT_DIM, margin: 0 }}>
@@ -325,22 +325,22 @@ function TransactionRow({ tx, categoryName, personName }: TransactionRowProps) {
   const isExpense = tx.amountCents > 0;
   return (
     <tr key={tx.id} style={{ borderTop: '1px solid #f3f4f6', opacity: tx.isDeleted ? 0.5 : 1 }}>
-      <td style={{ padding: 10, fontSize: 12 }}}{fmtDate(tx.bookingDate)}</td>
-      <td style={{ padding: 10, fontSize: 12 }}}{tx.label}</td>
-      <td style={{ padding: 10, fontSize: 12 }}}{categoryName || '—'}</td>
-      <td style={{ padding: 10, fontSize: 12 }}}{personName || '—'}</td>
+      <td style={{ padding: 10, fontSize: 12 }}{fmtDate(tx.bookingDate)}</td>
+      <td style={{ padding: 10, fontSize: 12 }}{tx.label}</td>
+      <td style={{ padding: 10, fontSize: 12 }}{categoryName || '—'}</td>
+      <td style={{ padding: 10, fontSize: 12 }}{personName || '—'}</td>
       <td style={{ padding: 10, fontSize: 12 }}>
         <strong style={{ color: isExpense ? COLOR_ERROR : '#111' }}>{fmtEuros(tx.amountCents)}</strong>
       </td>
       <td style={{ padding: 10, fontSize: 11 }}>
         <span
-          style={{{
+          style={{
             background: '#f3f4f6',
             padding: '1px 6px',
             borderRadius: 6,
             fontSize: 10,
             textTransform: 'uppercase',
-          }}}
+          }}
         >
           {tx.source}
         </span>
@@ -348,14 +348,14 @@ function TransactionRow({ tx, categoryName, personName }: TransactionRowProps) {
       <td style={{ padding: 10 }}>
         <Link
           href="/transactions"
-          style={{{
+          style={{
             fontSize: 11,
             padding: '4px 8px',
             borderRadius: 6,
             border: `1px solid ${COLOR_BORDER}`,
             textDecoration: 'none',
             color: COLOR_PRIMARY,
-          }}}
+          }}
         >
           Voir
         </Link>
@@ -557,14 +557,14 @@ export default function DashboardView({ userId }: DashboardViewProps) {
         <Header />
         <div style={{ maxWidth: 1200, margin: '0 auto' }}>
           <div
-            style={{{
+            style={{
               background: COLOR_CARD_BG,
               border: `1px solid ${COLOR_BORDER}`,
               borderRadius: 12,
               padding: 48,
               textAlign: 'center',
               color: COLOR_TEXT_MUTED,
-            }}}
+            }}
           >
             Chargement du tableau de bord…
           </div>
@@ -579,18 +579,18 @@ export default function DashboardView({ userId }: DashboardViewProps) {
         <Header />
         <div style={{ maxWidth: 1200, margin: '0 auto' }}>
           <div
-            style={{{
+            style={{
               background: '#fef2f2',
               border: `1px solid ${COLOR_ERROR}`,
               borderRadius: 12,
               padding: 24,
               color: '#991b1b',
-            }}}
+            }}
           >
             <p style={{ fontWeight: 600, margin: 0, marginBottom: 8 }}>{error}</p>
             <button
               onClick={loadData}
-              style={{{
+              style={{
                 background: COLOR_PRIMARY,
                 color: 'white',
                 border: 'none',
@@ -598,7 +598,7 @@ export default function DashboardView({ userId }: DashboardViewProps) {
                 borderRadius: 6,
                 fontSize: 13,
                 cursor: 'pointer',
-              }}}
+              }}
             >
               Réessayer
             </button>
@@ -658,14 +658,14 @@ export default function DashboardView({ userId }: DashboardViewProps) {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
           <div>
             <h1
-              style={{{
+              style={{
                 fontSize: 24,
                 fontWeight: 700,
                 color: '#111',
                 margin: 0,
                 marginBottom: 4,
                 letterSpacing: '-0.02em',
-              }}}
+              }}
             >
               Tableau de bord
             </h1>
@@ -676,7 +676,7 @@ export default function DashboardView({ userId }: DashboardViewProps) {
           <div style={{ display: 'flex', gap: 8 }}>
             <Link
               href="/transactions"
-              style={{{
+              style={{
                 background: COLOR_CARD_BG,
                 border: `1px solid ${COLOR_BORDER}`,
                 color: '#111',
@@ -684,13 +684,13 @@ export default function DashboardView({ userId }: DashboardViewProps) {
                 borderRadius: 8,
                 textDecoration: 'none',
                 fontSize: 13,
-              }}}
+              }}
             >
               Transactions
             </Link>
             <Link
               href="/budgets"
-              style={{{
+              style={{
                 background: COLOR_CARD_BG,
                 border: `1px solid ${COLOR_BORDER}`,
                 color: '#111',
@@ -698,13 +698,13 @@ export default function DashboardView({ userId }: DashboardViewProps) {
                 borderRadius: 8,
                 textDecoration: 'none',
                 fontSize: 13,
-              }}}
+              }}
             >
               Budgets
             </Link>
             <Link
               href="/objectifs"
-              style={{{
+              style={{
                 background: COLOR_CARD_BG,
                 border: `1px solid ${COLOR_BORDER}`,
                 color: '#111',
@@ -712,7 +712,7 @@ export default function DashboardView({ userId }: DashboardViewProps) {
                 borderRadius: 8,
                 textDecoration: 'none',
                 fontSize: 13,
-              }}}
+              }}
             >
               Objectifs
             </Link>
@@ -748,21 +748,21 @@ export default function DashboardView({ userId }: DashboardViewProps) {
         {/* Graphiques : dépenses par catégorie */}
         {visibleCards.includes('spending') && s.byCategory.length > 0 && (
           <div
-            style={{{
+            style={{
               background: COLOR_CARD_BG,
               border: `1px solid ${COLOR_BORDER}`,
               borderRadius: 12,
               padding: 18,
               marginBottom: 20,
-            }}}
+            }}
           >
             <h2 style={{ fontSize: 15, margin: 0, marginBottom: 14, color: '#111' }}>Dépenses par catégorie</h2>
             <div
-              style={{{
+              style={{
                 display: 'grid',
                 gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))',
                 gap: 10,
-              }}}
+              }}
             >
               {s.byCategory.map((c) => (
                 <CategoryCard
@@ -781,43 +781,43 @@ export default function DashboardView({ userId }: DashboardViewProps) {
         {/* Graphique : évolution mensuelle */}
         {visibleCards.includes('spending') && s.monthly.length > 0 && (
           <div
-            style={{{
+            style={{
               background: COLOR_CARD_BG,
               border: `1px solid ${COLOR_BORDER}`,
               borderRadius: 12,
               padding: 18,
               marginBottom: 20,
-            }}}
+            }}
           >
             <h2 style={{ fontSize: 15, margin: 0, marginBottom: 14, color: '#111' }}>Évolution mensuelle des dépenses</h2>
             <div style={{ height: 120 }}>
               <div
-                style={{{
+                style={{
                   display: 'flex',
                   alignItems: 'flex-end',
                   gap: 10,
                   height: 100,
                   paddingBottom: 8,
-                }}}
+                }}
               >
                 {s.monthly.map((m) => {
                   const max = Math.max(...s.monthly.map((x) => x.totalCents));
                   const pct = max ? Math.floor((m.totalCents / max) * 100) : 0;
                   return (
-                    <div key={m.label} style={{{
+                    <div key={m.label} style={{
                       display: 'flex',
                       flexDirection: 'column',
                       alignItems: 'center',
                       flex: 1,
-                    }}}>
+                    }}>
                       <div
-        style={{{
+        style={{
                           width: '100%',
                           background: COLOR_PRIMARY,
                           height: `${Math.max(pct, 8)}%`,
                           minHeight: 8,
                           borderRadius: '4px 4px 0 0',
-                        }}}
+                        }}
                       ></div>
                       <span style={{ fontSize: 11, marginTop: 6, color: COLOR_TEXT_MUTED }}>{m.label.slice(5)}</span>
                       <span style={{ fontSize: 10, color: COLOR_TEXT_DIM }}>{fmtEuros(m.totalCents)}</span>
@@ -834,24 +834,24 @@ export default function DashboardView({ userId }: DashboardViewProps) {
         {/* Section Budgets */}
         {(visibleCards.includes('spending') || visibleCards.includes('goals')) && s.budgetsWithUsage.length > 0 && (
           <div
-            style={{{
+            style={{
               background: COLOR_CARD_BG,
               border: `1px solid ${COLOR_BORDER}`,
               borderRadius: 12,
               padding: 18,
               marginBottom: 20,
-            }}}
+            }}
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
               <h2 style={{ fontSize: 15, margin: 0, color: '#111' }}>Budgets — utilisation réelle</h2>
               <Link
                 href="/budgets"
-                style={{{
+                style={{
                   fontSize: 12,
                   color: COLOR_PRIMARY,
                   textDecoration: 'none',
                   fontWeight: 600,
-                }}}
+                }}
               >
                 Voir tous →
               </Link>
@@ -883,34 +883,34 @@ export default function DashboardView({ userId }: DashboardViewProps) {
         {/* Section Objectifs */}
         {visibleCards.includes('goals') && s.goalsStats.length > 0 && (
           <div
-            style={{{
+            style={{
               background: COLOR_CARD_BG,
               border: `1px solid ${COLOR_BORDER}`,
               borderRadius: 12,
               padding: 18,
               marginBottom: 20,
-            }}}
+            }}
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
               <h2 style={{ fontSize: 15, margin: 0, color: '#111' }}>Objectifs d'épargne</h2>
               <Link
                 href="/objectifs"
-                style={{{
+                style={{
                   fontSize: 12,
                   color: COLOR_PRIMARY,
                   textDecoration: 'none',
                   fontWeight: 600,
-                }}}
+                }}
               >
                 Voir tous →
               </Link>
             </div>
             <div
-              style={{{
+              style={{
                 display: 'grid',
                 gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))',
                 gap: 12,
-              }}}
+              }}
             >
               {s.goalsStats.map((g) => (
                 <GoalCard key={g.id} {...g} />
@@ -922,23 +922,23 @@ export default function DashboardView({ userId }: DashboardViewProps) {
         {/* Section Transactions récentes */}
         {(visibleCards.includes('spending') || visibleCards.includes('recent-transactions')) && s.recentTransactions.length > 0 && (
           <div
-            style={{{
+            style={{
               background: COLOR_CARD_BG,
               border: `1px solid ${COLOR_BORDER}`,
               borderRadius: 12,
               padding: 18,
-            }}}
+            }}
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
               <h2 style={{ fontSize: 15, margin: 0, color: '#111' }}>Transactions récentes</h2>
               <Link
                 href="/transactions"
-                style={{{
+                style={{
                   fontSize: 12,
                   color: COLOR_PRIMARY,
                   textDecoration: 'none',
                   fontWeight: 600,
-                }}}
+                }}
               >
                 Voir toutes →
               </Link>
@@ -1033,7 +1033,7 @@ export default function DashboardView({ userId }: DashboardViewProps) {
 function Header() {
   return (
     <div
-      style={{{
+      style={{
         width: 240,
         background: COLOR_DARK,
         color: 'white',
@@ -1043,7 +1043,7 @@ function Header() {
         left: 0,
         top: 0,
         boxSizing: 'border-box',
-      }}}
+      }}
     >
       <h2
         style={{ color: COLOR_PRIMARY, marginBottom: 24, fontSize: 18, margin: 0 }}
@@ -1065,7 +1065,7 @@ function Header() {
           <Link
             key={l.href}
             href={l.href}
-            style={{{
+            style={{
               padding: '8px 12px',
               borderRadius: 8,
               background: '#7C3AED',
@@ -1075,14 +1075,14 @@ function Header() {
               gap: 8,
               fontSize: 13,
               fontWeight: 500,
-            }}}
+            }}
           >
             <span>{l.icon}</span> {l.label}
           </Link>
         ))}
       </div>
       <div style={{ marginTop: 32, padding: 12, background: '#1A1A1B', borderRadius: 8 }}>
-        <p style={{ fontSize: 12, color: '#888', margin: 0 }}}{APP_NAME}</p>
+        <p style={{ fontSize: 12, color: '#888', margin: 0 }}{APP_NAME}</p>
         <p style={{ fontSize: 11, color: '#666', margin: 4, marginTop: 8 }}>Local-first • Offline-ready</p>
         <p style={{ fontSize: 11, color: COLOR_SUCCESS, margin: 4 }}>● En ligne</p>
       </div>

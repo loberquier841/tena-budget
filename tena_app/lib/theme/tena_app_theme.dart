@@ -2,15 +2,10 @@ import 'package:flutter/material.dart';
 
 import 'tena_theme.dart';
 
-/// Thème Material 3 de l'application.
-///
-/// Le `colorScheme` est construit explicitement plutôt qu'à partir d'une
-/// graine : `fromSeed` produisait un doré ternedé et laissait les composants
-/// natifs (champs, dialogues, menus) dans un gris par défaut, ce qui
-/// contredisait les écrans dessinés à la main. Les couleurs proviennent
-/// toutes de [TenaColors], ce qui garantit la cohérence sur tous les widgets
-/// Material sans les redéfinir page par page.
-ThemeData buildTenaTheme() {
+/// Thème sombre Material 3 (existant, préservé) — noir/blanc/or subtil.
+ThemeData buildTenaTheme() => buildTenaDarkTheme();
+
+ThemeData buildTenaDarkTheme() {
   const scheme = ColorScheme.dark(
     primary: TenaColors.gold,
     onPrimary: Colors.black,
@@ -35,198 +30,213 @@ ThemeData buildTenaTheme() {
     scaffoldBackgroundColor: TenaColors.background,
   );
 
+  return _applyComponents(base, scheme,
+      appBarBg: TenaColors.background,
+      cardColor: TenaColors.surface,
+      dialogBg: TenaColors.surface,
+      inputFill: TenaColors.surfaceRaised,
+      popupBg: TenaColors.surfaceRaised,
+      snackBg: TenaColors.surfaceRaised,
+      track: TenaColors.surfaceRaised,
+      border: TenaColors.border,
+      textPrimary: TenaColors.textPrimary,
+      textSecondary: TenaColors.textSecondary,
+      textTertiary: TenaColors.textTertiary);
+}
+
+/// Thème clair Material 3 (LOT 9.1) — premium sobre, or subtil conservé.
+ThemeData buildTenaLightTheme() {
+  const gold = TenaColors.gold; // #D4AF37 accent conservé
+  const bg = Color(0xFFF7F7F8);
+  const surface = Colors.white;
+  const raised = Color(0xFFF0F0F2);
+  const border = Color(0xFFE1E1E6);
+  const textPrimary = Color(0xFF17171B);
+  const textSecondary = Color(0xFF5A5A66);
+  const textTertiary = Color(0xFF8A8A96);
+  const scheme = ColorScheme.light(
+    primary: Color(0xFF9A7B1F), // or plus lisible sur fond clair
+    onPrimary: Colors.white,
+    primaryContainer: Color(0xFFF3E6B8),
+    onPrimaryContainer: Color(0xFF2A2108),
+    secondary: TenaColors.goldMuted,
+    onSecondary: Colors.white,
+    surface: surface,
+    onSurface: textPrimary,
+    surfaceContainerHighest: raised,
+    onSurfaceVariant: textSecondary,
+    outline: textTertiary,
+    outlineVariant: border,
+    error: TenaColors.danger,
+    onError: Colors.white,
+  );
+
+  final base = ThemeData(
+    useMaterial3: true,
+    brightness: Brightness.light,
+    colorScheme: scheme,
+    scaffoldBackgroundColor: bg,
+  );
+
+  return _applyComponents(base, scheme,
+      appBarBg: bg,
+      cardColor: surface,
+      dialogBg: surface,
+      inputFill: raised,
+      popupBg: surface,
+      snackBg: const Color(0xFF1C1C20),
+      snackText: TenaColors.textPrimary,
+      track: raised,
+      border: border,
+      textPrimary: textPrimary,
+      textSecondary: textSecondary,
+      textTertiary: textTertiary,
+      focusPrimary: gold);
+}
+
+ThemeData _applyComponents(ThemeData base, ColorScheme scheme,
+    {required Color appBarBg,
+    required Color cardColor,
+    required Color dialogBg,
+    required Color inputFill,
+    required Color popupBg,
+    required Color snackBg,
+    Color? snackText,
+    required Color track,
+    required Color border,
+    required Color textPrimary,
+    required Color textSecondary,
+    required Color textTertiary,
+    Color? focusPrimary}) {
+  final focus = focusPrimary ?? scheme.primary;
   return base.copyWith(
-    appBarTheme: const AppBarTheme(
-      backgroundColor: TenaColors.background,
+    appBarTheme: AppBarTheme(
+      backgroundColor: appBarBg,
       surfaceTintColor: Colors.transparent,
-      foregroundColor: TenaColors.textPrimary,
+      foregroundColor: textPrimary,
       elevation: 0,
       scrolledUnderElevation: 0,
       centerTitle: false,
     ),
-
     cardTheme: CardThemeData(
-      color: TenaColors.surface,
+      color: cardColor,
       elevation: 0,
       surfaceTintColor: Colors.transparent,
-      shape: const RoundedRectangleBorder(borderRadius: TenaRadius.lg),
+      shape: RoundedRectangleBorder(
+          borderRadius: TenaRadius.lg, side: BorderSide(color: border)),
       margin: EdgeInsets.zero,
     ),
-
-    dividerTheme: const DividerThemeData(
-      color: TenaColors.border,
-      thickness: 1,
-      space: 1,
-    ),
-
+    dividerTheme: DividerThemeData(color: border, thickness: 1, space: 1),
     filledButtonTheme: FilledButtonThemeData(
       style: FilledButton.styleFrom(
         backgroundColor: TenaColors.gold,
         foregroundColor: Colors.black,
-        // Material dessine par défaut une ombre qui assombrit le bouton sur
-        // fond sombre.
         elevation: 0,
         padding: const EdgeInsets.symmetric(
-          horizontal: TenaSpacing.xl,
-          vertical: 14,
-        ),
+            horizontal: TenaSpacing.xl, vertical: 14),
         shape: const RoundedRectangleBorder(borderRadius: TenaRadius.md),
         textStyle: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
       ),
     ),
-
     outlinedButtonTheme: OutlinedButtonThemeData(
       style: OutlinedButton.styleFrom(
-        foregroundColor: TenaColors.gold,
-        side: const BorderSide(color: TenaColors.goldMuted),
+        foregroundColor: focus,
+        side: BorderSide(color: focus.withValues(alpha: 0.7)),
         padding: const EdgeInsets.symmetric(
-          horizontal: TenaSpacing.xl,
-          vertical: 14,
-        ),
+            horizontal: TenaSpacing.xl, vertical: 14),
         shape: const RoundedRectangleBorder(borderRadius: TenaRadius.md),
         textStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
       ),
     ),
-
     textButtonTheme: TextButtonThemeData(
       style: TextButton.styleFrom(
-        foregroundColor: TenaColors.goldLight,
-        textStyle: const TextStyle(fontWeight: FontWeight.w600),
-      ),
+          foregroundColor: focus,
+          textStyle: const TextStyle(fontWeight: FontWeight.w600)),
     ),
-
     inputDecorationTheme: InputDecorationTheme(
       filled: true,
-      fillColor: TenaColors.surfaceRaised,
+      fillColor: inputFill,
       contentPadding: const EdgeInsets.symmetric(
-        horizontal: TenaSpacing.lg,
-        vertical: TenaSpacing.lg,
-      ),
-      // Bordure discrète au repos, dorée au focus : c'est le principal
-      // marqueur d'interactivité des formulaires.
-      border: const OutlineInputBorder(
-        borderRadius: TenaRadius.md,
-        borderSide: BorderSide(color: TenaColors.border),
-      ),
-      enabledBorder: const OutlineInputBorder(
-        borderRadius: TenaRadius.md,
-        borderSide: BorderSide(color: TenaColors.border),
-      ),
-      focusedBorder: const OutlineInputBorder(
-        borderRadius: TenaRadius.md,
-        borderSide: BorderSide(color: TenaColors.gold, width: 1.5),
-      ),
+          horizontal: TenaSpacing.lg, vertical: TenaSpacing.lg),
+      border: OutlineInputBorder(
+          borderRadius: TenaRadius.md, borderSide: BorderSide(color: border)),
+      enabledBorder: OutlineInputBorder(
+          borderRadius: TenaRadius.md, borderSide: BorderSide(color: border)),
+      focusedBorder: OutlineInputBorder(
+          borderRadius: TenaRadius.md,
+          borderSide: BorderSide(color: focus, width: 1.5)),
       errorBorder: const OutlineInputBorder(
-        borderRadius: TenaRadius.md,
-        borderSide: BorderSide(color: TenaColors.danger),
-      ),
+          borderRadius: TenaRadius.md,
+          borderSide: BorderSide(color: TenaColors.danger)),
       focusedErrorBorder: const OutlineInputBorder(
-        borderRadius: TenaRadius.md,
-        borderSide: BorderSide(color: TenaColors.danger, width: 1.5),
-      ),
-      labelStyle: const TextStyle(color: TenaColors.textSecondary),
-      floatingLabelStyle: const TextStyle(color: TenaColors.gold),
-      hintStyle: const TextStyle(color: TenaColors.textTertiary),
-      prefixIconColor: TenaColors.textSecondary,
-      suffixIconColor: TenaColors.textSecondary,
+          borderRadius: TenaRadius.md,
+          borderSide: BorderSide(color: TenaColors.danger, width: 1.5)),
+      labelStyle: TextStyle(color: textSecondary),
+      floatingLabelStyle: TextStyle(color: focus),
+      hintStyle: TextStyle(color: textTertiary),
+      prefixIconColor: textSecondary,
+      suffixIconColor: textSecondary,
     ),
-
     dialogTheme: DialogThemeData(
-      backgroundColor: TenaColors.surface,
+      backgroundColor: dialogBg,
       surfaceTintColor: Colors.transparent,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(20),
-        side: const BorderSide(color: TenaColors.border),
-      ),
-      titleTextStyle: const TextStyle(
-        fontSize: 18,
-        fontWeight: FontWeight.w700,
-        color: TenaColors.textPrimary,
-      ),
-      contentTextStyle: const TextStyle(
-        fontSize: 14,
-        color: TenaColors.textSecondary,
-        height: 1.4,
-      ),
+          borderRadius: BorderRadius.circular(20),
+          side: BorderSide(color: border)),
+      titleTextStyle:
+          TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: textPrimary),
+      contentTextStyle:
+          TextStyle(fontSize: 14, color: textSecondary, height: 1.4),
     ),
-
-    bottomSheetTheme: const BottomSheetThemeData(
-      backgroundColor: TenaColors.surface,
+    bottomSheetTheme: BottomSheetThemeData(
+      backgroundColor: dialogBg,
       surfaceTintColor: Colors.transparent,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
     ),
-
     snackBarTheme: SnackBarThemeData(
-      backgroundColor: TenaColors.surfaceRaised,
-      contentTextStyle: const TextStyle(
-        color: TenaColors.textPrimary,
-        fontSize: 14,
-      ),
+      backgroundColor: snackBg,
+      contentTextStyle:
+          TextStyle(color: snackText ?? textPrimary, fontSize: 14),
       behavior: SnackBarBehavior.floating,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
     ),
-
-    listTileTheme: const ListTileThemeData(
-      iconColor: TenaColors.textSecondary,
-      textColor: TenaColors.textPrimary,
-    ),
-
+    listTileTheme:
+        ListTileThemeData(iconColor: textSecondary, textColor: textPrimary),
     popupMenuTheme: PopupMenuThemeData(
-      color: TenaColors.surfaceRaised,
+      color: popupBg,
       surfaceTintColor: Colors.transparent,
       elevation: 8,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(14),
-        side: const BorderSide(color: TenaColors.border),
-      ),
-      textStyle: const TextStyle(
-        color: TenaColors.textPrimary,
-        fontSize: 14,
-      ),
+          borderRadius: BorderRadius.circular(14),
+          side: BorderSide(color: border)),
+      textStyle: TextStyle(color: textPrimary, fontSize: 14),
     ),
-
     floatingActionButtonTheme: const FloatingActionButtonThemeData(
-      backgroundColor: TenaColors.gold,
-      foregroundColor: Colors.black,
-      elevation: 4,
-    ),
-
+        backgroundColor: TenaColors.gold,
+        foregroundColor: Colors.black,
+        elevation: 4),
     tooltipTheme: TooltipThemeData(
       decoration: BoxDecoration(
-        color: TenaColors.surfaceRaised,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: TenaColors.border),
-      ),
-      textStyle: const TextStyle(
-        color: TenaColors.textSecondary,
-        fontSize: 12,
-      ),
+          color: popupBg,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: border)),
+      textStyle: TextStyle(color: textSecondary, fontSize: 12),
     ),
-
-    progressIndicatorTheme: const ProgressIndicatorThemeData(
-      color: TenaColors.gold,
-      linearTrackColor: TenaColors.surfaceRaised,
-    ),
-
-    textTheme: const TextTheme(
+    progressIndicatorTheme:
+        ProgressIndicatorThemeData(color: focus, linearTrackColor: track),
+    textTheme: TextTheme(
       headlineSmall: TextStyle(
-        fontWeight: FontWeight.w700,
-        letterSpacing: -0.3,
-        color: TenaColors.textPrimary,
-      ),
-      titleLarge: TextStyle(
-        fontWeight: FontWeight.w700,
-        color: TenaColors.textPrimary,
-      ),
-      titleMedium: TextStyle(
-        fontWeight: FontWeight.w600,
-        color: TenaColors.textPrimary,
-      ),
-      bodyMedium: TextStyle(color: TenaColors.textSecondary, height: 1.4),
-      bodySmall: TextStyle(color: TenaColors.textTertiary),
-      labelLarge: TextStyle(fontWeight: FontWeight.w600),
+          fontWeight: FontWeight.w700,
+          letterSpacing: -0.3,
+          color: textPrimary),
+      titleLarge:
+          TextStyle(fontWeight: FontWeight.w700, color: textPrimary),
+      titleMedium:
+          TextStyle(fontWeight: FontWeight.w600, color: textPrimary),
+      bodyMedium: TextStyle(color: textSecondary, height: 1.4),
+      bodySmall: TextStyle(color: textTertiary),
+      labelLarge: const TextStyle(fontWeight: FontWeight.w600),
     ),
   );
 }

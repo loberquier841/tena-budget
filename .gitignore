@@ -11,3 +11,6 @@ test-results/
 !.env.example
 *.log
 .DS_Store
+
+# Local recovery artifacts
+.recovery_20261107/

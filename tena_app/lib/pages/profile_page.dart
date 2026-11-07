@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 
 import '../models/user_profile.dart';
+import '../services/app_scope.dart';
+import '../services/appearance_service.dart';
 import '../services/user_profile_service.dart';
+import '../theme/tena_theme.dart';
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
@@ -69,7 +72,8 @@ class _ProfilePageState extends State<ProfilePage> {
 
   Future<void> _load() async {
     try {
-      final profile = await UserProfileService.getProfile();
+      final profile = await UserProfileService.getProfile(
+          userId: AppScope.activeUserId);
       if (profile != null) {
         _existingCreatedAt = profile.createdAt;
         _householdMode =
@@ -128,6 +132,7 @@ class _ProfilePageState extends State<ProfilePage> {
             'compact': _compact,
           },
         ),
+        userId: AppScope.activeUserId,
       );
       _existingCreatedAt ??= now;
       setState(
@@ -218,6 +223,8 @@ class _ProfilePageState extends State<ProfilePage> {
     return ListView(
       padding: const EdgeInsets.all(20),
       children: [
+        _appearanceCard(),
+        const SizedBox(height: 16),
         Text(
           'Mon profil financier',
           style: Theme.of(context).textTheme.headlineMedium,
@@ -331,4 +338,62 @@ class _ProfilePageState extends State<ProfilePage> {
       ],
     );
   }
+
+  Widget _appearanceCard() {
+    return AnimatedBuilder(
+      animation: AppearanceService.instance,
+      builder: (context, _) {
+        final a = AppearanceService.instance;
+        return Card(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              const Text('Apparence & accessibilité', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
+              const SizedBox(height: 6),
+              const Text('Préférences locales (appareil). Thème premium noir/blanc/or.', style: TextStyle(color: TenaColors.textSecondary, fontSize: 12)),
+              const SizedBox(height: 12),
+              DropdownButtonFormField<ThemeMode>(
+                initialValue: a.themeMode,
+                decoration: const InputDecoration(labelText: 'Thème', border: OutlineInputBorder(), isDense: true),
+                items: const [
+                  DropdownMenuItem(value: ThemeMode.system, child: Text('Automatique (système)')),
+                  DropdownMenuItem(value: ThemeMode.dark, child: Text('Sombre')),
+                  DropdownMenuItem(value: ThemeMode.light, child: Text('Clair')),
+                ],
+                onChanged: (v){ if(v!=null) a.setThemeMode(v); },
+              ),
+              const SizedBox(height: 10),
+              Row(children: [
+                const Expanded(child: Text('Taille du texte')),
+                Text('${(a.textScale*100).round()}%', style: const TextStyle(color: TenaColors.textSecondary)),
+              ]),
+              Slider(min: 0.85, max: 1.35, divisions: 10, value: a.textScale, onChanged: a.setTextScale),
+              SwitchListTile.adaptive(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Réduire les animations'),
+                subtitle: const Text('Accessibilité / confort visuel', style: TextStyle(fontSize: 12)),
+                value: a.reduceMotion,
+                onChanged: a.setReduceMotion,
+              ),
+              const Divider(height: 18),
+              DropdownButtonFormField<String>(
+                initialValue: a.dateFormat,
+                decoration: const InputDecoration(labelText: 'Format de date', border: OutlineInputBorder(), isDense: true),
+                items: const [DropdownMenuItem(value: 'fr', child: Text('Français (JJ/MM/AAAA)')), DropdownMenuItem(value: 'iso', child: Text('ISO (AAAA-MM-JJ)'))],
+                onChanged: (v){ if(v!=null) a.setDateFormat(v); },
+              ),
+              const SizedBox(height: 10),
+              DropdownButtonFormField<String>(
+                initialValue: a.currency,
+                decoration: const InputDecoration(labelText: 'Devise d’affichage (préférence locale)', border: OutlineInputBorder(), isDense: true),
+                items: const [DropdownMenuItem(value: 'EUR', child: Text('EUR (€)')), DropdownMenuItem(value: 'CHF', child: Text('CHF')), DropdownMenuItem(value: 'USD', child: Text('USD'))],
+                onChanged: (v){ if(v!=null) a.setCurrency(v); },
+              ),
+            ]),
+          ),
+        );
+      },
+    );
+  }
+
 }

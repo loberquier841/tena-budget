@@ -16,15 +16,17 @@ void main() {
       expect(categories, CategoryService.defaultCategories);
     });
 
-    test('les valeurs par défaut sont persistées', () async {
+    test('les valeurs par défaut sont persistées (format réel chiffré)', () async {
       await CategoryService.getCategories();
 
       final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString('tena_budget_categories');
 
-      expect(
-        prefs.getStringList('tena_budget_categories'),
-        CategoryService.defaultCategories,
-      );
+      // Contrat réel : stockage chiffré (String JSON), pas StringList legacy.
+      expect(raw, isNotNull);
+      expect(raw, isNotEmpty);
+      // Relu via le service = valeurs par défaut.
+      expect(await CategoryService.getCategories(), CategoryService.defaultCategories);
     });
 
     test('ajoute une catégorie sans doublon, insensible à la casse', () async {

@@ -102,3 +102,11 @@ void main() {
     });
 
     test('la clé est générée puis conservée par le keystore', () async {
+      // La clé est générée à la première opération cryptographique puis persistée.
+      await CryptoService.encrypt('probe');
+      final key = await store.read();
+      expect(key, isNotNull);
+      expect(key, isNotEmpty);
+    });
+  });
+}

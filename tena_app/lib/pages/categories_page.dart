@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../services/app_scope.dart';
 import '../services/category_service.dart';
 
 class CategoriesPage extends StatefulWidget {
@@ -20,7 +21,7 @@ class _CategoriesPageState extends State<CategoriesPage> {
   }
 
   Future<void> _loadCategories() async {
-    final categories = await CategoryService.getCategories();
+    final categories = await CategoryService.getCategories(userId: AppScope.activeUserId);
 
     if (!mounted) return;
 
@@ -82,7 +83,7 @@ class _CategoriesPageState extends State<CategoriesPage> {
       return;
     }
 
-    await CategoryService.addCategory(name);
+    await CategoryService.addCategory(name, userId: AppScope.activeUserId);
 
     await _loadCategories();
   }
@@ -139,7 +140,7 @@ class _CategoriesPageState extends State<CategoriesPage> {
       return;
     }
 
-    await CategoryService.renameCategory(category, name);
+    await CategoryService.renameCategory(category, name, userId: AppScope.activeUserId);
 
     await _loadCategories();
   }
@@ -169,7 +170,7 @@ class _CategoriesPageState extends State<CategoriesPage> {
 
     if (confirmed != true) return;
 
-    await CategoryService.deleteCategory(category);
+    await CategoryService.deleteCategory(category, userId: AppScope.activeUserId);
 
     await _loadCategories();
   }

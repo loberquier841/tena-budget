@@ -1,5 +1,8 @@
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
-import 'package:sqflite_common_ffi/sqflite_ffi.dart';
+import 'package:path/path.dart' as p;
+import 'package:sqflite_common_ffi/sqflite_ffi.dart' hide Transaction;
 import 'package:csv/csv.dart';
 
 import 'package:tena_budget/services/database_service.dart';
@@ -29,16 +32,26 @@ void main() {
   final keyStore = _TestKeyStore();
   late DatabaseService db;
 
+  late Directory tempDir;
   setUpAll(() {
     sqfliteFfiInit();
-    CryptoService.useKeyStore(keyStore);
+    databaseFactory = databaseFactoryFfi;
   });
 
   setUp(() async {
+    tempDir = await Directory.systemTemp.createTemp('tena_csv_test_');
+    await DatabaseService.resetAndDeleteTestDatabase();
+    DatabaseService.testDatabasePath = p.join(tempDir.path, 'test.db');
+    CryptoService.debugSetKey(null);
+    CryptoService.useKeyStore(keyStore);
     db = DatabaseService.instance;
-    await db.resetForTesting();
-    final database = await db.database;
-    await database.delete('transactions');
+  });
+  tearDown(() async {
+    await DatabaseService.resetAndDeleteTestDatabase();
+    DatabaseService.testDatabasePath = null;
+    if (tempDir.existsSync()) {
+      try { await tempDir.delete(recursive: true); } catch (_) {}
+    }
   });
 
   group('CSV Export/Import — Edge Cases', () {
@@ -67,12 +80,14 @@ void main() {
       final csv = await db.exportTransactionsToCsv(includeDeleted: false);
       expect(csv, isNotEmpty);
 
-      final lines = csv.trim().split('
-');
+      final lines = csv.trim().split('\n');
       expect(lines.length, 3);
       expect(lines[0], 'id,amount,category,description,date,type,isDeleted,notes');
 
-      await db.resetForTesting();
+      // Réouverture simulée sur le même fichier de test (isolation conservée).
+      await DatabaseService.instance.database; // ensure closed/open path stable
+      DatabaseService.resetForTesting();
+      db = DatabaseService.instance;
       final imported = await db.importTransactionsFromCsv(csv);
       expect(imported, 2);
 
@@ -94,12 +109,9 @@ void main() {
     });
 
     test('import handles UTF-8 accents in category and description', () async {
-      const csv = 'id,amount,category,description,date,type,isDeleted,notes
-'
-          't1,100.50,Déjeuner,Restaurant "Le Café",2026-01-15,expense,0,Note avec accents éàùç
-'
-          't2,200,00,Transport,Métro ligne 1,2026-01-16,expense,0,"Note avec guillemets et, virgule"
-';
+      const csv = 'id,amount,category,description,date,type,isDeleted,notes\n'
+          't1,100.50,Déjeuner,Restaurant "Le Café",2026-01-15,expense,0,Note avec accents éàùç\n'
+          't2,200.00,Transport,Métro ligne 1,2026-01-16,expense,0,"Note avec guillemets et, virgule"\n';
 
       final imported = await db.importTransactionsFromCsv(csv);
       expect(imported, 2);
@@ -117,11 +129,8 @@ void main() {
     });
 
     test('import handles newlines in quoted fields', () async {
-      const csv = 'id,amount,category,description,date,type,isDeleted,notes
-'
-          't1,50.00,Test,"Description avec
-retour à la ligne",2026-01-15,expense,0,Note normale
-';
+      const csv = 'id,amount,category,description,date,type,isDeleted,notes\n'
+          't1,50.00,Test,"Description avec\nretour à la ligne",2026-01-15,expense,0,Note normale\n';
 
       final imported = await db.importTransactionsFromCsv(csv);
       expect(imported, 1);
@@ -132,12 +141,9 @@ retour à la ligne",2026-01-15,expense,0,Note normale
     });
 
     test('import handles negative amounts correctly', () async {
-      const csv = 'id,amount,category,description,date,type,isDeleted,notes
-'
-          't1,-100.00,Remboursement,Remboursement achat,2026-01-15,expense,0,
-'
-          't2,-50.50,Autre,Autre remboursement,2026-01-16,income,0,
-';
+      const csv = 'id,amount,category,description,date,type,isDeleted,notes\n'
+          't1,-100.00,Remboursement,Remboursement achat,2026-01-15,expense,0,\n'
+          't2,-50.50,Autre,Autre remboursement,2026-01-16,income,0,\n';
 
       final imported = await db.importTransactionsFromCsv(csv);
       expect(imported, 2);
@@ -153,10 +159,8 @@ retour à la ligne",2026-01-15,expense,0,Note normale
     });
 
     test('import handles transfer type', () async {
-      const csv = 'id,amount,category,description,date,type,isDeleted,notes
-'
-          't1,500.00,Transfert,Virement compte épargne,2026-01-15,transfer,0,
-';
+      const csv = 'id,amount,category,description,date,type,isDeleted,notes\n'
+          't1,500.00,Transfert,Virement compte épargne,2026-01-15,transfer,0,\n';
 
       final imported = await db.importTransactionsFromCsv(csv);
       expect(imported, 1);
@@ -168,22 +172,14 @@ retour à la ligne",2026-01-15,expense,0,Note normale
     });
 
     test('import ignores invalid lines gracefully', () async {
-      const csv = 'id,amount,category,description,date,type,isDeleted,notes
-'
-          't1,100.00,Valid,Valid desc,2026-01-15,expense,0,
-'
-          'invalid,line,with,few,fields
-'
-          't2,200.00,AlsoValid,Another desc,2026-01-16,income,0,
-'
-          ',t3,300.00,MissingID,Desc,2026-01-17,expense,0,
-'
-          't4,not-a-number,BadAmount,Desc,2026-01-18,expense,0,
-'
-          't5,400.00,BadDate,Desc,invalid-date,expense,0,
-'
-          't6,500.00,BadType,Desc,2026-01-19,unknown,0,
-';
+      const csv = 'id,amount,category,description,date,type,isDeleted,notes\n'
+          't1,100.00,Valid,Valid desc,2026-01-15,expense,0,\n'
+          'invalid,line,with,few,fields\n'
+          't2,200.00,AlsoValid,Another desc,2026-01-16,income,0,\n'
+          ',t3,300.00,MissingID,Desc,2026-01-17,expense,0,\n'
+          't4,not-a-number,BadAmount,Desc,2026-01-18,expense,0,\n'
+          't5,400.00,BadDate,Desc,invalid-date,expense,0,\n'
+          't6,500.00,BadType,Desc,2026-01-19,unknown,0,\n';
 
       final imported = await db.importTransactionsFromCsv(csv);
       expect(imported, 2);
@@ -195,12 +191,9 @@ retour à la ligne",2026-01-15,expense,0,Note normale
     });
 
     test('import handles isDeleted flag', () async {
-      const csv = 'id,amount,category,description,date,type,isDeleted,notes
-'
-          't1,100.00,Test,Normal,2026-01-15,expense,0,
-'
-          't2,200.00,Test,Deleted,2026-01-16,expense,1,
-';
+      const csv = 'id,amount,category,description,date,type,isDeleted,notes\n'
+          't1,100.00,Test,Normal,2026-01-15,expense,0,\n'
+          't2,200.00,Test,Deleted,2026-01-16,expense,1,\n';
 
       final imported = await db.importTransactionsFromCsv(csv);
       expect(imported, 2);
@@ -216,16 +209,12 @@ retour à la ligne",2026-01-15,expense,0,Note normale
     });
 
     test('import with duplicate IDs updates existing (INSERT OR REPLACE)', () async {
-      const csv1 = 'id,amount,category,description,date,type,isDeleted,notes
-'
-          't1,100.00,Original,First import,2026-01-15,expense,0,
-';
+      const csv1 = 'id,amount,category,description,date,type,isDeleted,notes\n'
+          't1,100.00,Original,First import,2026-01-15,expense,0,\n';
       await db.importTransactionsFromCsv(csv1);
 
-      const csv2 = 'id,amount,category,description,date,type,isDeleted,notes
-'
-          't1,999.99,Mise à jour,Second import,2026-01-20,income,0,Updated note
-';
+      const csv2 = 'id,amount,category,description,date,type,isDeleted,notes\n'
+          't1,999.99,Mise à jour,Second import,2026-01-20,income,0,Updated note\n';
       final imported = await db.importTransactionsFromCsv(csv2);
       expect(imported, 1);
 
@@ -260,25 +249,21 @@ retour à la ligne",2026-01-15,expense,0,Note normale
       ));
 
       final csvExclude = await db.exportTransactionsToCsv(includeDeleted: false);
-      final linesExclude = csvExclude.trim().split('
-');
+      final linesExclude = csvExclude.trim().split('\n');
       expect(linesExclude.length, 2);
 
       final csvInclude = await db.exportTransactionsToCsv(includeDeleted: true);
-      final linesInclude = csvInclude.trim().split('
-');
+      final linesInclude = csvInclude.trim().split('\n');
       expect(linesInclude.length, 3);
     });
 
     test('empty CSV import returns 0', () async {
       expect(await db.importTransactionsFromCsv(''), 0);
-      expect(await db.importTransactionsFromCsv('id,amount,category,description,date,type,isDeleted,notes
-'), 0);
+      expect(await db.importTransactionsFromCsv('id,amount,category,description,date,type,isDeleted,notes\n'), 0);
     });
 
     test('CSV with only headers returns 0', () async {
-      const csv = 'id,amount,category,description,date,type,isDeleted,notes
-';
+      const csv = 'id,amount,category,description,date,type,isDeleted,notes\n';
       expect(await db.importTransactionsFromCsv(csv), 0);
     });
   });

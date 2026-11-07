@@ -2,10 +2,14 @@ import 'package:flutter/material.dart';
 
 import 'pages/transactions_page.dart';
 import 'pages/categories_page.dart';
+import 'pages/documents_page.dart';
 import 'pages/budget_page.dart';
 import 'pages/goals_page.dart';
 import 'pages/forecast_page.dart';
 import 'pages/profile_page.dart';
+import 'pages/onboarding_page.dart';
+import 'pages/app_module_page.dart' show AppModulePage, TenaModuleStatus;
+import 'pages/backups_page.dart';
 import 'models/finance_summary.dart';
 import 'widgets/finance_chart.dart';
 
@@ -13,6 +17,8 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'models/transaction.dart';
+import 'services/appearance_service.dart';
+import 'services/app_scope.dart';
 import 'services/crypto_service.dart';
 import 'services/budget_service.dart';
 import 'services/finance_service.dart';
@@ -20,6 +26,7 @@ import 'services/goal_service.dart';
 import 'services/notification_service.dart';
 import 'services/payment_service.dart';
 import 'services/secure_key_store.dart';
+import 'services/user_profile_service.dart';
 import 'state/period_state.dart';
 import 'theme/tena_app_theme.dart';
 import 'theme/tena_theme.dart';
@@ -42,6 +49,7 @@ Future<void> main() async {
   // L'état de paiement doit être connu avant le premier rendu : sans lui,
   // l'écran afficherait la page principale puis le paywall (flash).
   await PaymentService.instance.load();
+  await AppearanceService.instance.load();
 
   runApp(const TenaBudgetApp());
 }
@@ -51,12 +59,29 @@ class TenaBudgetApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'TENΛ Budget',
-      debugShowCheckedModeBanner: false,
-      // Thème centralisé : voir `buildTenaTheme` pour le détail des choix.
-      theme: buildTenaTheme(),
-      home: const TenaHome(),
+    return AnimatedBuilder(
+      animation: AppearanceService.instance,
+      builder: (context, _) {
+        final a = AppearanceService.instance;
+        return MaterialApp(
+          title: 'TENΛ Budget',
+          debugShowCheckedModeBanner: false,
+          theme: buildTenaLightTheme(),
+          darkTheme: buildTenaDarkTheme(),
+          themeMode: a.themeMode,
+          builder: (context, child) {
+            final media = MediaQuery.of(context);
+            return MediaQuery(
+              data: media.copyWith(
+                textScaler: TextScaler.linear(a.textScale),
+                disableAnimations: a.reduceMotion ? true : media.disableAnimations,
+              ),
+              child: child ?? const SizedBox.shrink(),
+            );
+          },
+          home: const TenaHome(),
+        );
+      },
     );
   }
 }
@@ -70,6 +95,10 @@ class TenaHome extends StatefulWidget {
 
 class _TenaHomeState extends State<TenaHome> {
   int selectedIndex = 0;
+  bool _checkingProfile = true;
+  bool _hasProfile = false;
+  bool _sidebarCollapsed = false;
+  String _sidebarSearch = '';
 
   /// Période partagée par les pages : le mois sélectionné sur le tableau de
   /// bord s'applique également au module Budget (PeriodState était jusqu'ici
@@ -84,47 +113,80 @@ class _TenaHomeState extends State<TenaHome> {
   /// même avec la barre latérale visible.
   static const double _wideBreakpoint = 1080;
 
-  final pages = const [
-    TenaNavItem(
+  @override
+  void initState() {
+    super.initState();
+    _checkProfileStatus();
+  }
+
+  Future<void> _checkProfileStatus() async {
+    try {
+      final profile = await UserProfileService.getProfile();
+      if (!mounted) return;
+      setState(() {
+        _hasProfile = profile != null;
+        _checkingProfile = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _hasProfile = false;
+        _checkingProfile = false;
+      });
+    }
+  }
+
+  final pages = <TenaNavItem>[
+    const TenaNavItem(
       title: 'Accueil',
       icon: Icons.dashboard_outlined,
       activeIcon: Icons.dashboard_rounded,
     ),
-    TenaNavItem(
+    const TenaNavItem(
       title: 'Budget',
       icon: Icons.account_balance_wallet_outlined,
       activeIcon: Icons.account_balance_wallet_rounded,
     ),
-    TenaNavItem(title: 'Transactions', icon: Icons.swap_vert_rounded),
-    TenaNavItem(
+    const TenaNavItem(title: 'Transactions', icon: Icons.swap_vert_rounded),
+    const TenaNavItem(
       title: 'Catégories',
       icon: Icons.category_outlined,
       activeIcon: Icons.category_rounded,
     ),
-    TenaNavItem(
+    const TenaNavItem(
       title: 'Objectifs',
       icon: Icons.track_changes_outlined,
       activeIcon: Icons.track_changes_rounded,
     ),
-    TenaNavItem(
+    const TenaNavItem(
       title: 'Prévisions',
       icon: Icons.insights_outlined,
       activeIcon: Icons.insights_rounded,
     ),
-    TenaNavItem(
+    const TenaNavItem(
       title: 'IA TENΛ',
       icon: Icons.auto_awesome_outlined,
       activeIcon: Icons.auto_awesome,
+      status: TenaModuleStatus.planned,
     ),
-    TenaNavItem(title: 'Rapports', icon: Icons.assessment_outlined),
-    TenaNavItem(title: 'Documents', icon: Icons.folder_outlined),
-    TenaNavItem(title: 'Notifications', icon: Icons.notifications_none),
-    TenaNavItem(title: 'Comparateur', icon: Icons.compare_arrows_rounded),
-    TenaNavItem(title: 'Famille', icon: Icons.family_restroom_rounded),
-    TenaNavItem(title: 'Entreprise', icon: Icons.business_outlined),
-    TenaNavItem(title: 'Autopilot', icon: Icons.bolt_rounded),
-    TenaNavItem(title: 'Paramètres', icon: Icons.settings_outlined),
-    TenaNavItem(title: 'Mon profil', icon: Icons.person_outline_rounded),
+    const TenaNavItem(title: 'Rapports', icon: Icons.assessment_outlined, status: TenaModuleStatus.planned),
+    const TenaNavItem(
+      title: 'Documents',
+      icon: Icons.folder_outlined,
+      activeIcon: Icons.folder_rounded,
+    ),
+    const TenaNavItem(title: 'Notifications', icon: Icons.notifications_none, status: TenaModuleStatus.planned),
+    const TenaNavItem(title: 'Comparateur', icon: Icons.compare_arrows_rounded, status: TenaModuleStatus.planned),
+    const TenaNavItem(title: 'Famille', icon: Icons.family_restroom_rounded, status: TenaModuleStatus.planned),
+    const TenaNavItem(title: 'Entreprise', icon: Icons.business_outlined, status: TenaModuleStatus.planned),
+    const TenaNavItem(title: 'Autopilot', icon: Icons.bolt_rounded, status: TenaModuleStatus.planned),
+    const TenaNavItem(
+      title: 'Sauvegardes',
+      icon: Icons.backup_outlined,
+      activeIcon: Icons.backup_rounded,
+    ),
+    const TenaNavItem(title: 'Paramètres', icon: Icons.settings_outlined),
+    const TenaNavItem(title: 'Mon profil', icon: Icons.person_outline_rounded),
   ];
 
   @override
@@ -156,12 +218,59 @@ class _TenaHomeState extends State<TenaHome> {
 
   @override
   Widget build(BuildContext context) {
+    if (_checkingProfile) {
+      return const Scaffold(
+        backgroundColor: Color(0xFF0A0A0C),
+        body: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.account_balance_wallet_rounded,
+                color: Color(0xFFC5A059),
+                size: 48,
+              ),
+              SizedBox(height: 16),
+              Text(
+                'TENΛ BUDGET',
+                style: TextStyle(
+                  color: Color(0xFFE5C07B),
+                  fontSize: 20,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 2,
+                ),
+              ),
+              SizedBox(height: 24),
+              CircularProgressIndicator(
+                strokeWidth: 2,
+                color: Color(0xFFC5A059),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    if (!_hasProfile) {
+      return OnboardingPage(
+        onComplete: () {
+          setState(() {
+            _hasProfile = true;
+          });
+        },
+      );
+    }
+
     final current = pages[selectedIndex];
 
     final sidebar = TenaSidebar(
       items: pages,
       selectedIndex: selectedIndex,
       onSelected: _selectPage,
+      collapsed: _sidebarCollapsed,
+      onToggleCollapsed: () => setState(() => _sidebarCollapsed = !_sidebarCollapsed),
+      searchQuery: _sidebarSearch,
+      onSearchChanged: (v) => setState(() => _sidebarSearch = v),
     );
 
     return LayoutBuilder(
@@ -209,7 +318,12 @@ class _TenaHomeState extends State<TenaHome> {
           body: isWide
               ? Row(
                   children: [
-                    SizedBox(width: TenaSidebar.railWidth, child: sidebar),
+                    AnimatedContainer(
+                      duration: const Duration(milliseconds: 180),
+                      curve: Curves.easeOut,
+                      width: _sidebarCollapsed ? TenaSidebar.collapsedWidth : TenaSidebar.railWidth,
+                      child: sidebar,
+                    ),
                     const VerticalDivider(width: 1),
                     Expanded(child: content),
                   ],
@@ -221,8 +335,25 @@ class _TenaHomeState extends State<TenaHome> {
   }
 
   Widget _buildPage(TenaNavItem page) {
-    if (page.title == 'Mon profil') {
-      return const ProfilePage();
+    if (page.title == 'Mon profil') return const ProfilePage();
+    if (page.title == 'Sauvegardes') return const BackupsPage();
+    if (page.title == 'Documents') return const DocumentsPage();
+    if (page.title == 'Paramètres') {
+      return AppModulePage(
+        title: 'Paramètres',
+        icon: Icons.settings_outlined,
+        status: TenaModuleStatus.inProgress,
+        summary:
+            'Réglages locaux : profil, catégories, sauvegardes chiffrées/restauration (local ou portable par phrase de passe), '
+            'import CSV. 100% local/offline — aucune synchronisation cloud ni serveur. Périmètre mono-profil sécurisé (primary).',
+        actions: const [
+          (label: 'Sauvegardes', pageIndex: 15, icon: Icons.backup_outlined),
+          (label: 'Mon profil', pageIndex: 16, icon: Icons.person_outline_rounded),
+          (label: 'Catégories', pageIndex: 3, icon: Icons.category_outlined),
+          (label: 'Transactions', pageIndex: 2, icon: Icons.swap_vert_rounded),
+        ],
+        onNavigate: _goToPage,
+      );
     }
     if (selectedIndex == 0) {
       return DashboardPage(period: _period, onNavigate: _goToPage);
@@ -246,30 +377,34 @@ class _TenaHomeState extends State<TenaHome> {
       return const ForecastPage();
     }
 
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              page.icon,
-              size: 64,
-              color: Theme.of(context).colorScheme.primary,
-            ),
-            const SizedBox(height: 20),
-            Text(
-              page.title,
-              style: const TextStyle(fontSize: 32, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 12),
-            Text(
-              'Module TENΛ Budget',
-              style: TextStyle(color: Colors.grey.shade400, fontSize: 16),
-            ),
-          ],
-        ),
-      ),
+    // Modules non branchés : état honnête, aucune donnée fictive.
+    final summary = switch (page.title) {
+      'IA TENΛ' =>
+        'Assistant IA local prévu. Aucune connexion IA active ; aucune donnée financière n’est envoyée.',
+      'Rapports' =>
+        'Rapports détaillés prévus. Les totaux réels sont visibles sur Tableau de bord, Budget et Transactions (données locales).',
+      'Documents' =>
+        'Coffre documentaire/OCR local prévu. Non branché : aucun document fictif.',
+      'Notifications' =>
+        'Alertes locales calculées à partir de données réelles (budget/solde) visibles sur le Tableau de bord. Notifications système dédiées non branchées.',
+      'Comparateur' => 'Module prévu, non branché sur des données réelles.',
+      'Famille' => 'Espace partagé prévu. Non disponible en local dans cette version.',
+      'Entreprise' => 'Module prévu, non branché.',
+      'Autopilot' => 'Automatisations locales prévues (règles explicites). Non actives.',
+      _ => 'Module non branché sur des données réelles.',
+    };
+    return AppModulePage(
+      title: page.title,
+      icon: page.icon,
+      status: TenaModuleStatus.planned,
+      summary: summary,
+      actions: const [
+        (label: 'Tableau de bord', pageIndex: 0, icon: Icons.dashboard_outlined),
+        (label: 'Transactions', pageIndex: 2, icon: Icons.swap_vert_rounded),
+        (label: 'Budget', pageIndex: 1, icon: Icons.account_balance_wallet_outlined),
+        (label: 'Mon profil', pageIndex: 15, icon: Icons.person_outline_rounded),
+      ],
+      onNavigate: _goToPage,
     );
   }
 }
@@ -296,18 +431,32 @@ class _DashboardPageState extends State<DashboardPage> {
   @override
   void initState() {
     super.initState();
+    widget.period.addListener(_onPeriodChanged);
     _loadMonth();
   }
 
+  void _onPeriodChanged() {
+    if (!mounted) return;
+    setState(_loadMonth);
+  }
+
+  @override
+  void dispose() {
+    widget.period.removeListener(_onPeriodChanged);
+    super.dispose();
+  }
+
   void _loadMonth() {
-    _summaryFuture = FinanceService.getSummaryForMonth(
-      widget.period.selectedMonth,
+    _summaryFuture = FinanceService.getSummaryForRange(
+      widget.period.start,
+      widget.period.end,
+      userId: AppScope.activeUserId,
     );
 
     // Le budget global est injecté dans le tableau de bord : il sert à la
     // carte « Budget global » et aux alertes, et doit donc refléter la
     // dernière valeur enregistrée dans le module Budget.
-    BudgetService.getGlobalBudget()
+    BudgetService.getGlobalBudget(userId: AppScope.activeUserId)
         .then((value) {
           if (!mounted) return;
 

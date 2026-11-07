@@ -2,6 +2,8 @@ import 'dart:convert';
 
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'app_scope.dart';
+
 enum NotificationSeverity {
   info,
   warning,
@@ -70,7 +72,9 @@ class BudgetNotification {
 /// Chaque notification est calculée à partir de données réelles (transactions,
 /// budgets, objectifs) : rien n'est affiché sans motif vérifiable.
 class NotificationService {
-  static const String _key = 'tena_budget_notifications';
+  static const String _baseKey = 'tena_budget_notifications';
+
+  static String _key(String userId) => '${_baseKey}_$userId';
 
   /// Au-delà de ce nombre, les plus anciennes sont purgées : la liste doit
   /// rester lisible et ne pas croître indéfiniment.
@@ -86,10 +90,11 @@ class NotificationService {
     return SharedPreferences.getInstance();
   }
 
-  static Future<List<BudgetNotification>> getNotifications() async {
+  static Future<List<BudgetNotification>> getNotifications(
+      {String userId = AppScope.activeUserId}) async {
     final prefs = await _prefs();
 
-    final raw = prefs.getStringList(_key) ?? const <String>[];
+    final raw = prefs.getStringList(_key(userId)) ?? const <String>[];
 
     final result = <BudgetNotification>[];
 
@@ -109,11 +114,12 @@ class NotificationService {
     return result;
   }
 
-  static Future<void> _save(List<BudgetNotification> notifications) async {
+  static Future<void> _save(List<BudgetNotification> notifications,
+      {String userId = AppScope.activeUserId}) async {
     final prefs = await _prefs();
 
     await prefs.setStringList(
-      _key,
+      _key(userId),
       notifications.map((n) => jsonEncode(n.toJson())).toList(),
     );
   }
@@ -122,10 +128,11 @@ class NotificationService {
   ///
   /// L'identifiant stable de la règle sert de garde-fou : sans lui, la même
   /// alerte réapparaîtrait à chaque évaluation et saturerait l'écran.
-  static Future<void> pushNew(List<BudgetNotification> incoming) async {
+  static Future<void> pushNew(List<BudgetNotification> incoming,
+      {String userId = AppScope.activeUserId}) async {
     if (incoming.isEmpty) return;
 
-    final existing = await getNotifications();
+    final existing = await getNotifications(userId: userId);
     final known = existing.map((n) => n.id).toSet();
 
     final fresh = incoming.where((n) => !known.contains(n.id)).toList();
@@ -135,20 +142,23 @@ class NotificationService {
     final merged = [...fresh, ...existing]
       ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
 
-    await _save(merged.take(_maxStored).toList());
+    await _save(merged.take(_maxStored).toList(), userId: userId);
   }
 
   /// Vide la liste des notifications.
-  static Future<void> markAllRead() async {
+  static Future<void> markAllRead(
+      {String userId = AppScope.activeUserId}) async {
     final prefs = await _prefs();
 
-    await prefs.remove(_key);
+    await prefs.remove(_key(userId));
   }
 
-  static Future<void> remove(String id) async {
-    final notifications = await getNotifications();
+  static Future<void> remove(String id,
+      {String userId = AppScope.activeUserId}) async {
+    final notifications = await getNotifications(userId: userId);
 
-    await _save(notifications.where((n) => n.id != id).toList());
+    await _save(notifications.where((n) => n.id != id).toList(),
+        userId: userId);
   }
 
   static String money(double value) {

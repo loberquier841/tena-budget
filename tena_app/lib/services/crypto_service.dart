@@ -174,7 +174,16 @@ class CryptoService {
   /// Lance [CryptoException] en cas d'échec de déchiffrement ; l'appelant
   /// doit gérer cette erreur plutôt que de laisser la valeur devenir zéro.
   static Future<double> decryptNumber(String value) async {
-    if (!_isEncrypted(value)) return double.tryParse(value) ?? 0;
+    if (!_isEncrypted(value)) {
+      final parsed = double.tryParse(value);
+      if (parsed != null) return parsed;
+      // Valeur legacy/corrompue non numérique : lever une erreur explicite
+      // plutôt que de retourner 0 silencieusement (risque financier).
+      throw CryptoException(
+        'DECRYPT_PARSE_FAILED',
+        'Montant en clair illisible (migration/corruption)',
+      );
+    }
 
     try {
       final cleared = await decrypt(value);

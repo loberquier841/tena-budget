@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'import_csv_page.dart';
+import 'transaction_documents_page.dart';
 
 import '../models/transaction.dart';
+import '../services/app_scope.dart';
 import '../services/database_service.dart';
 import '../services/category_service.dart';
 
@@ -45,6 +48,7 @@ class _TransactionsPageState extends State<TransactionsPage> {
   Future<void> _loadTransactions() async {
     final transactions = await _database.getTransactions(
       includeDeleted: _showDeleted,
+      userId: AppScope.activeUserId,
     );
 
     if (!mounted) return;
@@ -178,7 +182,7 @@ class _TransactionsPageState extends State<TransactionsPage> {
 
     if (result == null) return;
 
-    await _database.insertTransaction(result);
+    await _database.insertTransaction(result, userId: AppScope.activeUserId);
     await _loadTransactions();
   }
 
@@ -190,7 +194,7 @@ class _TransactionsPageState extends State<TransactionsPage> {
 
     if (result == null) return;
 
-    await _database.updateTransaction(result);
+    await _database.updateTransaction(result, userId: AppScope.activeUserId);
     await _loadTransactions();
   }
 
@@ -227,12 +231,12 @@ class _TransactionsPageState extends State<TransactionsPage> {
 
     if (confirmed != true) return;
 
-    await _database.deleteTransaction(transaction.id);
+    await _database.deleteTransaction(transaction.id, userId: AppScope.activeUserId);
     await _loadTransactions();
   }
 
   Future<void> _restoreTransaction(Transaction transaction) async {
-    await _database.restoreTransaction(transaction.id);
+    await _database.restoreTransaction(transaction.id, userId: AppScope.activeUserId);
     await _loadTransactions();
 
     if (!mounted) return;
@@ -270,7 +274,7 @@ class _TransactionsPageState extends State<TransactionsPage> {
 
     if (confirmed != true) return;
 
-    await _database.purgeTransaction(transaction.id);
+    await _database.purgeTransaction(transaction.id, userId: AppScope.activeUserId);
     await _loadTransactions();
   }
 
@@ -298,6 +302,13 @@ class _TransactionsPageState extends State<TransactionsPage> {
     }
 
     return const [
+      PopupMenuItem(
+        value: 'docs',
+        child: ListTile(
+          leading: Icon(Icons.attach_file),
+          title: Text('Justificatifs'),
+        ),
+      ),
       PopupMenuItem(
         value: 'edit',
         child: ListTile(
@@ -541,8 +552,10 @@ class _TransactionsPageState extends State<TransactionsPage> {
                                 ),
                                 const SizedBox(width: 8),
                                 PopupMenuButton<String>(
-                                  onSelected: (value) {
-                                    if (value == 'edit') {
+                                  onSelected: (value) async {
+                                    if (value == 'docs') {
+                                      await Navigator.push(context, MaterialPageRoute(builder: (_)=>TransactionDocumentsPage(transaction: transaction)));
+                                    } else if (value == 'edit') {
                                       _editTransaction(transaction);
                                     } else if (value == 'delete') {
                                       _deleteTransaction(transaction);
@@ -658,7 +671,7 @@ class _TransactionDialogState extends State<_TransactionDialog> {
   }
 
   Future<void> _loadCategories() async {
-    final categories = await CategoryService.getCategories();
+    final categories = await CategoryService.getCategories(userId: AppScope.activeUserId);
 
     if (!mounted) return;
 

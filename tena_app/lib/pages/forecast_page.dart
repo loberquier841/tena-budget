@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../services/app_scope.dart';
 import '../services/database_service.dart';
 import '../services/forecast_service.dart';
 
@@ -23,7 +24,9 @@ class _ForecastPageState extends State<ForecastPage> {
   }
 
   Future<void> _load() async {
-    final transactions = await _database.getTransactions();
+    final transactions = await _database.getTransactions(
+      userId: AppScope.activeUserId,
+    );
     final forecast = ForecastService.calculate(transactions);
 
     if (!mounted) return;

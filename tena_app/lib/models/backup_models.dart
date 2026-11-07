@@ -1,58 +1,79 @@
 /// Modèles de données pour le format de sauvegarde TENΛ Budget.
-///
-/// Le format est versionné, structuré et validable. Il contient uniquement
-/// les données réellement présentes et autorisées : profil, transactions,
-/// budgets et objectifs.
-///
-/// Le champ `checksum` garantit l'intégrité : toute altération du fichier est
-/// détectée avant toute restauration.
+library;
 
-import 'dart:convert';
+///
+/// Format versionné, structuré, validable, 100% local/offline.
+/// - v1 (rétrocompatibilité lecture) : profil, transactions, budgets, objectifs.
+/// - v2 : + catégories, préférences, métadonnées/relations, couverture déclarée.
+///   Chiffrement : mode `local_key` (keystore existant) ou `portable_passphrase`
+///   (dérivation Argon2id, fallback PBKDF2-HMAC-SHA256 ; sel+params dans le
+///   fichier ; chiffrement authentifié AES-GCM). Aucune clé/phrase en clair.
+///
+/// L'empreinte SHA-256 porte sur les données JSON canoniques AVANT chiffrement.
+/// Toute altération/corruption est détectée avant restauration.
 
 import 'package:meta/meta.dart';
 
-/// Version actuelle du format de sauvegarde.
-///
-/// Toute modification du format (ajout/suppression de champ, changement de
-/// encodage) doit incrémenter ce numéro. Les versions inconnues sont rejetées
-/// par [BackupService].
-const int backupFormatVersion = 1;
+/// Version actuelle du format de sauvegarde (écriture).
+const int backupFormatVersion = 2;
+
+/// Versions de format acceptées en lecture/restauration (rétrocompatibilité).
+const Set<int> supportedBackupFormatVersions = {1, 2};
 
 /// Schéma de base de données cible de cette version du format.
 const int backupSchemaVersion = 5;
 
 /// Préfixe identifiant un fichier de sauvegarde TENΛ Budget valide.
-const String _backupFormatMarker = 'tena_budget_backup';
+const String backupFormatMarker = 'tena_budget_backup';
+
+/// Extension des fichiers de sauvegarde.
+const String backupFileExtension = '.tenabackup';
+
+/// Modes de chiffrement.
+class BackupEncryptionMode {
+  static const localKey = 'local_key';
+  static const portablePassphrase = 'portable_passphrase';
+  const BackupEncryptionMode._();
+}
 
 /// Données personnelles collectées pour une sauvegarde.
 ///
-/// Seules les données effectivement présentes sont incluses. Aucun champ
-/// n'est inventé pour combler une absence.
+/// Seules les données effectivement présentes/intégrées sont incluses.
 @immutable
 class BackupData {
-  /// Profil utilisateur (questionnaire local), `null` si absent.
   final Map<String, dynamic>? profile;
-
-  /// Transactions locales, chiffrées ou non selon l'origine.
   final List<Map<String, dynamic>> transactions;
-
-  /// Budgets : montant global et budgets par catégorie.
   final Map<String, dynamic> budgets;
-
-  /// Objectifs d'épargne.
   final List<Map<String, dynamic>> goals;
+  /// Catégories de dépenses/revenus (réellement persistées).
+  final List<String> categories;
+  /// Préférences locales sûres (clés techniques connues, valeurs non sensibles).
+  final Map<String, dynamic> preferences;
+  /// Métadonnées/relations déclarées (liens d'identifiants connus).
+  final Map<String, dynamic> metadata;
+  /// Couverture réelle déclarée (ce qui est/ n'est pas inclus).
+  final Map<String, dynamic> coverage;
+  /// Justificatifs (métadonnées + contenu base64 quand présent), liés aux transactions.
+  final List<Map<String, dynamic>> documents;
 
   const BackupData({
     this.profile,
     required this.transactions,
     required this.budgets,
     required this.goals,
+    this.categories = const [],
+    this.preferences = const {},
+    this.metadata = const {},
+    this.coverage = const {},
+    this.documents = const [],
   });
 
-  /// Nombre total de données personnelles incluses dans la sauvegarde.
   int get itemCount =>
       transactions.length +
       goals.length +
+      categories.length +
+      preferences.length +
+      documents.length +
       (budgets['categories'] as Map? ?? <String, dynamic>{}).length +
       (budgets['global'] != null ? 1 : 0) +
       (profile != null ? 1 : 0);
@@ -62,6 +83,11 @@ class BackupData {
         'transactions': transactions,
         'budgets': budgets,
         'goals': goals,
+        'categories': categories,
+        'preferences': preferences,
+        'metadata': metadata,
+        'coverage': coverage,
+        'documents': documents,
       };
 
   factory BackupData.fromJson(Map<String, dynamic> json) {
@@ -74,13 +100,18 @@ class BackupData {
       goals: (json['goals'] as List? ?? <dynamic>[])
           .map((e) => Map<String, dynamic>.from(e as Map))
           .toList(),
+      categories: (json['categories'] as List? ?? <dynamic>[])
+          .map((e) => e.toString())
+          .toList(),
+      preferences: Map<String, dynamic>.from(json['preferences'] as Map? ?? {}),
+      metadata: Map<String, dynamic>.from(json['metadata'] as Map? ?? {}),
+      coverage: Map<String, dynamic>.from(json['coverage'] as Map? ?? {}),
+      documents: (json['documents'] as List? ?? <dynamic>[]).map((e)=>Map<String,dynamic>.from(e as Map)).toList(),
     );
   }
 }
 
-/// Résumé lisible des données qui seront restaurées.
-///
-/// Affiché à l'utilisateur avant confirmation de la restauration.
+/// Résumé lisible affiché avant confirmation de restauration.
 @immutable
 class BackupSummary {
   final int formatVersion;
@@ -88,7 +119,10 @@ class BackupSummary {
   final DateTime createdAt;
   final String appVersion;
   final bool encrypted;
+  final String? encryptionMode; // local_key | portable_passphrase | null
+  final Map<String, dynamic>? kdf; // paramètres dérivation (portable) - sans secret
   final BackupData data;
+  final List<String> warnings;
 
   const BackupSummary({
     required this.formatVersion,
@@ -96,51 +130,43 @@ class BackupSummary {
     required this.createdAt,
     required this.appVersion,
     required this.encrypted,
+    required this.encryptionMode,
+    required this.kdf,
     required this.data,
+    this.warnings = const [],
   });
 
-  /// Nombre de transactions à restaurer.
   int get transactionCount => data.transactions.length;
-
-  /// Nombre d'objectifs à restaurer.
   int get goalCount => data.goals.length;
-
-  /// Nombre de budgets à restaurer (global + par catégorie).
+  int get categoryCount => data.categories.length;
+  int get preferenceCount => data.preferences.length;
+  int get documentCount => data.documents.length;
+  bool get hasProfile => data.profile != null;
   int get budgetCount {
-    final categories =
-        data.budgets['categories'] as Map? ?? <String, dynamic>{};
+    final categories = data.budgets['categories'] as Map? ?? <String, dynamic>{};
     return (data.budgets['global'] != null ? 1 : 0) + categories.length;
   }
 
-  /// Indique si un profil est présent.
-  bool get hasProfile => data.profile != null;
+  bool get isPortable => encryptionMode == BackupEncryptionMode.portablePassphrase;
 }
 
-/// Fichier de sauvegarde complet : métadonnées + données + contrôle d'intégrité.
+/// Fichier de sauvegarde complet : métadonnées + données + intégrité.
 @immutable
 class BackupFile {
-  /// Identifiant du format (`tena_budget_backup`).
   final String format;
-
-  /// Version du format.
   final int version;
-
-  /// Date de création.
   final DateTime createdAt;
-
-  /// Version de l'application au moment de la création.
   final String appVersion;
-
-  /// Version du schéma de base de données.
   final int schemaVersion;
-
-  /// Indique si la section `data` est chiffrée.
   final bool encrypted;
-
-  /// Empreinte SHA-256 de la section `data` (avant chiffrement).
+  /// `local_key` | `portable_passphrase` | null (v1/clair)
+  final String? encryptionMode;
+  /// Paramètres KDF publics (portable) : algorithme, sel, itérations/mémoire, etc.
+  /// Ne contient jamais la phrase de passe ni une clé.
+  final Map<String, dynamic>? kdf;
+  /// Empreinte SHA-256 du JSON canonique des données AVANT chiffrement.
   final String checksum;
-
-  /// Données de sauvegarde (structurées, ou chaîne chiffrée si `encrypted`).
+  /// Données structurées (clair) ou blob chiffré string (chiffré).
   final dynamic data;
 
   const BackupFile({
@@ -150,6 +176,8 @@ class BackupFile {
     required this.appVersion,
     required this.schemaVersion,
     required this.encrypted,
+    required this.encryptionMode,
+    required this.kdf,
     required this.checksum,
     required this.data,
   });
@@ -161,55 +189,51 @@ class BackupFile {
         'appVersion': appVersion,
         'schemaVersion': schemaVersion,
         'encrypted': encrypted,
+        if (encryptionMode != null) 'encryptionMode': encryptionMode,
+        if (kdf != null) 'kdf': kdf,
         'checksum': checksum,
         'data': data,
       };
 
   factory BackupFile.fromJson(Map<String, dynamic> json) {
+    final enc = json['encrypted'] as bool? ?? false;
+    final mode = json['encryptionMode'] as String? ??
+        (enc ? BackupEncryptionMode.localKey : null); // v1 compat
     return BackupFile(
-      format: json['format'] as String,
-      version: json['version'] as int,
-      createdAt: DateTime.parse(json['createdAt'] as String),
-      appVersion: json['appVersion'] as String,
-      schemaVersion: json['schemaVersion'] as int,
-      encrypted: json['encrypted'] as bool,
-      checksum: json['checksum'] as String,
+      format: json['format'] as String? ?? '',
+      version: (json['version'] as num?)?.toInt() ?? 0,
+      createdAt: DateTime.tryParse(json['createdAt'] as String? ?? '') ??
+          DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
+      appVersion: json['appVersion'] as String? ?? 'inconnu',
+      schemaVersion: (json['schemaVersion'] as num?)?.toInt() ?? 0,
+      encrypted: enc,
+      encryptionMode: mode,
+      kdf: json['kdf'] == null
+          ? null
+          : Map<String, dynamic>.from(json['kdf'] as Map),
+      checksum: json['checksum'] as String? ?? '',
       data: json['data'],
     );
   }
 }
 
-/// Erreurs de sauvegarde et restauration.
-///
-/// Aucune de ces erreurs n'entraîne d'écrasement silencieux des données
-/// existantes.
+/// Erreurs de sauvegarde/restauration (aucun écrasement silencieux).
 class BackupException implements Exception {
   final String code;
   final String message;
-
   const BackupException(this.code, this.message);
-
   @override
   String toString() => 'BackupException($code: $message)';
 }
 
-/// Résultat de validation d'un fichier de sauvegarde.
+/// Résultat de validation/prévisualisation.
 @immutable
 class BackupValidationResult {
-  /// Le fichier est valide et peut être restauré.
   final bool isValid;
-
-  /// Motif du rejet, si `isValid` est false.
   final String? reason;
-
-  /// Résumé des données contenues, si valide.
   final BackupSummary? summary;
 
-  const BackupValidationResult._({
-    required this.isValid,
-    this.reason,
-    this.summary,
-  });
+  const BackupValidationResult._({required this.isValid, this.reason, this.summary});
 
   factory BackupValidationResult.valid(BackupSummary summary) =>
       BackupValidationResult._(isValid: true, summary: summary);
@@ -218,8 +242,46 @@ class BackupValidationResult {
       BackupValidationResult._(isValid: false, reason: reason);
 }
 
-/// Sérialise les données de manière canonique (clés triées) pour le calcul
-/// de l'empreinte. Le résultat est déterministe pour un même contenu.
-String _canonicalJson(dynamic value) {
-  return const JsonEncoder.withIndent(' ').convert(value);
+/// Résultat détaillé d'une restauration.
+@immutable
+class BackupRestoreResult {
+  final bool success;
+  final String? errorCode;
+  final String? errorMessage;
+  final String? preRestoreBackupPath;
+  final int transactionsRestored;
+  final int budgetsRestored;
+  final int goalsRestored;
+  final int categoriesRestored;
+  final bool profileRestored;
+  final int preferencesRestored;
+  final int documentsRestored;
+  final List<String> warnings;
+  final List<String> skipped;
+
+  const BackupRestoreResult({
+    required this.success,
+    this.errorCode,
+    this.errorMessage,
+    this.preRestoreBackupPath,
+    this.transactionsRestored = 0,
+    this.budgetsRestored = 0,
+    this.goalsRestored = 0,
+    this.categoriesRestored = 0,
+    this.profileRestored = false,
+    this.preferencesRestored = 0,
+    this.documentsRestored = 0,
+    this.warnings = const [],
+    this.skipped = const [],
+  });
+
+  factory BackupRestoreResult.failure(String code, String message,
+          {String? preRestoreBackupPath, List<String> warnings = const []}) =>
+      BackupRestoreResult(
+        success: false,
+        errorCode: code,
+        errorMessage: message,
+        preRestoreBackupPath: preRestoreBackupPath,
+        warnings: warnings,
+      );
 }

@@ -3,16 +3,13 @@ import 'dart:io';
 import 'package:csv/csv.dart';
 import 'package:path/path.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
-// IMPORTANT : ne pas supprimer cet import.
-// Sur Android/iOS, `package:sqflite` installe la factory par défaut basée sur
-// le plugin natif. Sans lui, `databaseFactory` resterait la factory FFI et le
-// build mobile échouerait à l'exécution. L'analyseur le signale comme
-// redondant car sqflite_common_ffi ré-exporte les mêmes symboles.
-// ignore: unnecessary_import
+// IMPORTANT : ne pas supprimer cet import (factory mobile). Voir HEAD.
 import 'package:sqflite/sqflite.dart';
 
 import '../models/transaction.dart' as model;
+import '../models/transaction_document.dart';
 import 'crypto_service.dart';
+import 'import_service.dart';
 import 'package:meta/meta.dart';
 
 /// Modèle léger pour un budget de catégorie (lu/écrit via [DatabaseService]).
@@ -31,7 +28,6 @@ class BudgetEntry {
 }
 
 /// Modèle léger pour un objectif d'épargne (lu/écrit via [DatabaseService]).
-/// Montants stockés en centimes (entiers) pour éviter les erreurs de précision floating-point.
 class GoalEntry {
   final String id;
   final String name;
@@ -62,6 +58,23 @@ class GoalEntry {
   });
 }
 
+/// Contexte pour le pipeline d'import (empreintes/IDs existants, scopés userId).
+class ImportContext {
+  final Set<String> fingerprints;
+  final Map<String, String> existingIds; // id -> fingerprint
+  const ImportContext({required this.fingerprints, required this.existingIds});
+}
+
+/// Résultat du commit d'un plan d'import (LOT 2).
+class ImportCommitResult {
+  final int imported;
+  final int updated;
+  final int skipped;
+  final List<String> conflicts;
+  const ImportCommitResult(
+      {this.imported = 0, this.updated = 0, this.skipped = 0, this.conflicts = const []});
+}
+
 class DatabaseService {
   static final DatabaseService instance = DatabaseService._internal();
 
@@ -69,36 +82,41 @@ class DatabaseService {
 
   DatabaseService._internal();
 
+  /// Chemin DB imposé pour les tests (isolation). Null en production.
+  @visibleForTesting
+  static String? testDatabasePath;
+
   /// Réinitialise le singleton pour les tests (ferme la base en cache).
   @visibleForTesting
   static void resetForTesting() {
     _database = null;
   }
 
+  /// Ferme et supprime la DB de test si [testDatabasePath] est défini.
+  @visibleForTesting
+  static Future<void> resetAndDeleteTestDatabase() async {
+    final db = _database;
+    _database = null;
+    if (db != null && db.isOpen) {
+      try { await db.close(); } catch (_) {}
+    }
+    final path = testDatabasePath;
+    if (path != null) {
+      try { await databaseFactory.deleteDatabase(path); } catch (_) {
+        try { await File(path).delete(); } catch (_) {}
+      }
+    }
+  }
+
   Future<Database> get database async {
     if (_database != null) return _database!;
-
     _database = await _initDatabase();
     return _database!;
   }
 
-  /// Version du schéma SQLite.
-  ///
-  /// v1 : id, amount, category, description, date, type
-  /// v2 : notes, is_deleted (suppression logique) et index sur la date
-  /// v3 : chiffrement AES-GCM des transactions existantes.
-  /// v4 : profil/questionnaire local chiffré; migration additive.
-  /// v5 : tables budgets et objectives chiffrées, cohérentes avec les transactions.
-  static const int _schemaVersion = 7;
-
-  /// Version stockée dans la base de données (lue au premier accès).
-  /// Si cette version est inférieure à _schemaVersion, des migrations sont
-  /// nécessaires. On indique la version courante pour que les utilisateurs
-  /// sachent quand une mise à jour de schéma est en cours.
+  /// v1-v7 existants ; v8 profil/userId budgets/goals robuste ; v9 documents.
+  static const int _schemaVersion = 9;
   static int _storedSchemaVersion = 0;
-
-  /// Message d'information affiché au premier démarrage si des données en
-  /// clair sont détectées et en cours de migration vers le chiffrement.
   static String? _migrationMessage;
 
   Future<Database> _initDatabase() async {
@@ -106,56 +124,67 @@ class DatabaseService {
       sqfliteFfiInit();
       databaseFactory = databaseFactoryFfi;
     }
-
-    final databasesPath = await getDatabasesPath();
-    final path = join(databasesPath, 'tena_budget.db');
-
+    final path = testDatabasePath ?? join(await getDatabasesPath(), 'tena_budget.db');
     return openDatabase(
       path,
       version: _schemaVersion,
       onCreate: (db, version) async {
         await _createSchema(db);
+        await _createIndexes(db);
       },
       onUpgrade: (db, oldVersion, newVersion) async {
-        // Chaque migration porte sur une seule version : elles s'enchaînent
-        // dans l'ordre et permettent d'évoluer à long terme.
-        if (oldVersion < 2) {
-          await _migrateToV2(db);
-        }
-
-        if (oldVersion < 3) {
-          await _migrateToV3(db);
-        }
-
-        if (oldVersion < 4) {
-          await _createUserProfileSchema(db);
-        }
-
+        if (oldVersion < 2) await _migrateToV2(db);
+        if (oldVersion < 3) await _migrateToV3(db);
+        if (oldVersion < 4) await _createUserProfileSchema(db);
         if (oldVersion < 5) {
           await _createBudgetsSchema(db);
           await _createGoalsSchema(db);
         }
-
-        if (oldVersion < 6) {
-          await _migrateToV6(db);
-        }
-
-        if (oldVersion < 7) {
-          await _migrateToV7(db);
-        }
-
-        // Mise à jour de la version stockée après toutes les migrations
+        if (oldVersion < 6) await _migrateToV6(db);
+        if (oldVersion < 7) await _migrateToV7(db);
+        if (oldVersion < 8) await _migrateToV8(db);
+        if (oldVersion < 9) await _createDocumentsSchema(db);
         _storedSchemaVersion = newVersion;
-        // Vérifier s'il y a eu migration de données en clair
         _checkAndSetMigrationMessage(oldVersion, newVersion);
-      },
-
         await _createIndexes(db);
       },
     );
   }
 
-  /// Schéma appliqué lors de la création d'une base.
+  Future<bool> _columnExists(Database db, String table, String column) async {
+    final info = await db.rawQuery("PRAGMA table_info('$table')");
+    return info.any((row) => row['name'] == column);
+  }
+
+  Future<void> _addColumnIfMissing(Database db, String table, String ddl) async {
+    final col = RegExp(r'ADD COLUMN\s+(\w+)', caseSensitive: false).firstMatch(ddl)?.group(1);
+    if (col != null && await _columnExists(db, table, col)) return;
+    await db.execute(ddl);
+  }
+
+  Future<void> _migrateToV6(Database db) async {
+    await _addColumnIfMissing(db, 'transactions', 'ALTER TABLE transactions ADD COLUMN userId TEXT NOT NULL DEFAULT "primary"');
+    await _addColumnIfMissing(db, 'budgets', 'ALTER TABLE budgets ADD COLUMN userId TEXT NOT NULL DEFAULT "primary"');
+    await _addColumnIfMissing(db, 'goals', 'ALTER TABLE goals ADD COLUMN userId TEXT NOT NULL DEFAULT "primary"');
+  }
+
+  Future<void> _migrateToV8(Database db) async {
+    if (!await _columnExists(db, 'user_profile', 'userId')) {
+      await db.execute('ALTER TABLE user_profile ADD COLUMN userId TEXT NOT NULL DEFAULT "primary"');
+    }
+  }
+
+  Future<void> _migrateToV7(Database db) async {
+    await _addColumnIfMissing(db, 'goals', 'ALTER TABLE goals ADD COLUMN category TEXT NOT NULL DEFAULT "other"');
+    await _addColumnIfMissing(db, 'goals', 'ALTER TABLE goals ADD COLUMN target_date TEXT');
+    await _addColumnIfMissing(db, 'goals', 'ALTER TABLE goals ADD COLUMN recurring_amount_cents TEXT');
+    await _addColumnIfMissing(db, 'goals', 'ALTER TABLE goals ADD COLUMN recurring_start_date TEXT');
+    await _addColumnIfMissing(db, 'goals', "ALTER TABLE goals ADD COLUMN milestones TEXT NOT NULL DEFAULT '[25,50,75,100]'");
+    const epoch = "'1970-01-01T00:00:00Z'";
+    await _addColumnIfMissing(db, 'goals', "ALTER TABLE goals ADD COLUMN created_at TEXT NOT NULL DEFAULT $epoch");
+    await _addColumnIfMissing(db, 'goals', "ALTER TABLE goals ADD COLUMN updated_at TEXT NOT NULL DEFAULT $epoch");
+  }
+
   Future<void> _createSchema(Database db) async {
     await db.execute('''
       CREATE TABLE transactions (
@@ -170,23 +199,22 @@ class DatabaseService {
         userId TEXT NOT NULL DEFAULT 'primary'
       )
     ''');
-
-    await _createIndexes(db);
     await _createUserProfileSchema(db);
     await _createBudgetsSchema(db);
     await _createGoalsSchema(db);
+    await _createDocumentsSchema(db);
   }
 
   Future<void> _createUserProfileSchema(Database db) async {
     await db.execute('''
       CREATE TABLE IF NOT EXISTS user_profile (
         id TEXT PRIMARY KEY,
-        payload TEXT NOT NULL
+        payload TEXT NOT NULL,
+        userId TEXT NOT NULL DEFAULT 'primary'
       )
     ''');
   }
 
-  /// Crée la table `budgets` (montant chiffré, suppression logique).
   Future<void> _createBudgetsSchema(Database db) async {
     await db.execute('''
       CREATE TABLE IF NOT EXISTS budgets (
@@ -200,7 +228,26 @@ class DatabaseService {
     ''');
   }
 
-  /// Crée la table `goals` (nom, cible et épargne chiffrés, suppression logique).
+  Future<void> _createDocumentsSchema(Database db) async {
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS documents (
+        id TEXT PRIMARY KEY,
+        transaction_id TEXT NOT NULL,
+        file_name TEXT NOT NULL,
+        relative_path TEXT NOT NULL,
+        mime_type TEXT NOT NULL,
+        size_bytes INTEGER NOT NULL DEFAULT 0,
+        sha256 TEXT,
+        note TEXT,
+        category TEXT,
+        userId TEXT NOT NULL DEFAULT 'primary',
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        is_deleted INTEGER NOT NULL DEFAULT 0
+      )
+    ''');
+  }
+
   Future<void> _createGoalsSchema(Database db) async {
     await db.execute('''
       CREATE TABLE IF NOT EXISTS goals (
@@ -208,111 +255,73 @@ class DatabaseService {
         name TEXT NOT NULL,
         target_cents TEXT NOT NULL,
         saved_cents TEXT NOT NULL,
+        is_deleted INTEGER NOT NULL DEFAULT 0,
+        userId TEXT NOT NULL DEFAULT 'primary',
         category TEXT NOT NULL DEFAULT 'other',
         target_date TEXT,
         recurring_amount_cents TEXT,
         recurring_start_date TEXT,
         milestones TEXT NOT NULL DEFAULT '[25,50,75,100]',
         created_at TEXT NOT NULL,
-        updated_at TEXT NOT NULL,
-        is_deleted INTEGER NOT NULL DEFAULT 0,
-        userId TEXT NOT NULL DEFAULT 'primary'
+        updated_at TEXT NOT NULL
       )
     ''');
   }
 
-  /// Migration v1 -> v2 : note libre, suppression logique, index sur la date.
-  ///
-  /// Les données existantes sont conservées telles quelles : les nouvelles
-  /// colonnes prennent une valeur par défaut neutre.
   Future<void> _migrateToV2(Database db) async {
-    await db.execute(
-      "ALTER TABLE transactions ADD COLUMN notes TEXT NOT NULL DEFAULT ''",
-    );
-    await db.execute(
-      'ALTER TABLE transactions ADD COLUMN is_deleted INTEGER NOT NULL DEFAULT 0',
-    );
-  }
-
-  /// Migration v2 -> v3 : chiffre les données déjà présentes.
-  ///
-  /// Les lignes existantes sont relues puis réécrites chiffrées. Le préfixe
-  /// `tena1:` permet de distinguer une valeur chiffrée d'une valeur en clair :
-  /// une transaction qui l'est déjà n'est donc jamais chiffrée deux fois.
-  Future<void> _migrateToV3(Database db) async {
-    final rows = await db.query('transactions');
-
-    for (final row in rows) {
-      final transaction = await _toTransaction(row);
-
-      await db.update(
-        'transactions',
-        await _toRow(transaction),
-        where: 'id = ?',
-        whereArgs: [row['id']],
-      );
+    if (!await _columnExists(db, 'transactions', 'notes')) {
+      await db.execute("ALTER TABLE transactions ADD COLUMN notes TEXT NOT NULL DEFAULT ''");
+    }
+    if (!await _columnExists(db, 'transactions', 'is_deleted')) {
+      await db.execute('ALTER TABLE transactions ADD COLUMN is_deleted INTEGER NOT NULL DEFAULT 0');
     }
   }
 
-    /// Migration v5 -> v6 : ajoute l'isolateur `userId` pour séparation multi-utilisateurs.
-  /// Toutes les nouvelles lignes reçoivent `userId = 'primary'` par défaut,
-  /// assurant la compatibilité avec les données existantes.
-  Future<void> _migrateToV6(Database db) async {
-    await db.execute(
-      'ALTER TABLE transactions ADD COLUMN userId TEXT NOT NULL DEFAULT "primary"',
-    );
-    await db.execute(
-      'ALTER TABLE budgets ADD COLUMN userId TEXT NOT NULL DEFAULT "primary"',
-    );
-    await db.execute(
-      'ALTER TABLE goals ADD COLUMN userId TEXT NOT NULL DEFAULT "primary"',
-    );
-  }
-
-  /// Migration v6 -> v7 : ajoute les colonnes enrichies pour les objectifs
-  /// (catégorie, date cible, récurrent, jalons, dates de création/mise à jour).
-  Future<void> _migrateToV7(Database db) async {
-    await db.execute(
-      'ALTER TABLE goals ADD COLUMN category TEXT NOT NULL DEFAULT "other"',
-    );
-    await db.execute(
-      'ALTER TABLE goals ADD COLUMN target_date TEXT',
-    );
-    await db.execute(
-      'ALTER TABLE goals ADD COLUMN recurring_amount_cents TEXT',
-    );
-    await db.execute(
-      'ALTER TABLE goals ADD COLUMN recurring_start_date TEXT',
-    );
-    await db.execute(
-      'ALTER TABLE goals ADD COLUMN milestones TEXT NOT NULL DEFAULT \'[25,50,75,100]\'',
-    );
-    await db.execute(
-      'ALTER TABLE goals ADD COLUMN created_at TEXT NOT NULL DEFAULT (datetime(\'now\'))',
-    );
-    await db.execute(
-      'ALTER TABLE goals ADD COLUMN updated_at TEXT NOT NULL DEFAULT (datetime(\'now\'))',
-    );
+  Future<void> _migrateToV3(Database db) async {
+    if (await _columnExists(db, 'transactions', 'userId')) {
+      await db.execute('ALTER TABLE transactions DROP COLUMN userId');
+    }
+    final rows = await db.query('transactions');
+    for (final row in rows) {
+      final amountRaw = '${row['amount']}';
+      if (CryptoService.isEncryptedValue(amountRaw)) continue;
+      final updated = <String, Object?>{
+        'amount': await CryptoService.encryptNumber(double.tryParse(amountRaw) ?? 0),
+        'category': await CryptoService.encrypt('${row['category']}'),
+        'description': await CryptoService.encrypt('${row['description']}'),
+        'date': await CryptoService.encrypt('${row['date']}'),
+        'type': await CryptoService.encrypt('${row['type']}'),
+        'notes': await CryptoService.encrypt('${row['notes'] ?? ''}'),
+      };
+      await db.update('transactions', updated, where: 'id = ?', whereArgs: [row['id']]);
+    }
   }
 
   Future<void> _createIndexes(Database db) async {
-    await db.execute(
-      'CREATE INDEX IF NOT EXISTS idx_transactions_date ON transactions(date)',
-    );
-    await db.execute(
-      'CREATE INDEX IF NOT EXISTS idx_transactions_deleted '
-      'ON transactions(is_deleted)',
-    );
-    await db.execute(
-      'CREATE INDEX IF NOT EXISTS idx_budgets_deleted ON budgets(is_deleted)',
-    );
-    await db.execute(
-      'CREATE INDEX IF NOT EXISTS idx_goals_deleted ON goals(is_deleted)',
-    );
+    Future<bool> hasTable(String name) async {
+      final r = await db.rawQuery("SELECT name FROM sqlite_master WHERE type='table' AND name=?", [name]);
+      return r.isNotEmpty;
+    }
+    if (await hasTable('transactions')) {
+      await db.execute('CREATE INDEX IF NOT EXISTS idx_transactions_date ON transactions(date)');
+      await db.execute('CREATE INDEX IF NOT EXISTS idx_transactions_deleted ON transactions(is_deleted)');
+      await db.execute('CREATE INDEX IF NOT EXISTS idx_transactions_user ON transactions(userId)');
+    }
+    if (await hasTable('budgets')) {
+      await db.execute('CREATE INDEX IF NOT EXISTS idx_budgets_deleted ON budgets(is_deleted)');
+      await db.execute('CREATE INDEX IF NOT EXISTS idx_budgets_user ON budgets(userId)');
+    }
+    if (await hasTable('goals')) {
+      await db.execute('CREATE INDEX IF NOT EXISTS idx_goals_deleted ON goals(is_deleted)');
+      await db.execute('CREATE INDEX IF NOT EXISTS idx_goals_user ON goals(userId)');
+    }
+    if (await hasTable('documents')) {
+      await db.execute('CREATE INDEX IF NOT EXISTS idx_documents_tx ON documents(transaction_id)');
+      await db.execute('CREATE INDEX IF NOT EXISTS idx_documents_user ON documents(userId)');
+    }
   }
 
-  /// Convertit un modèle en ligne SQLite, en chiffrant les champs sensibles.
-  Future<Map<String, Object?>> _toRow(model.Transaction transaction) async {
+  Future<Map<String, Object?>> _toRow(model.Transaction transaction, {String userId = 'primary'}) async {
     return {
       'id': transaction.id,
       'amount': await CryptoService.encryptNumber(transaction.amount),
@@ -322,608 +331,94 @@ class DatabaseService {
       'type': await CryptoService.encrypt(transaction.type.name),
       'notes': await CryptoService.encrypt(transaction.notes),
       'is_deleted': transaction.isDeleted ? 1 : 0,
-      'userId': 'primary',
+      'userId': userId,
     };
   }
 
-  /// Convertit une ligne SQLite en modèle [model.Transaction], en déchiffrant
-  /// les champs sensibles. Lance une erreur si le déchiffrement échoue,
-  /// au lieu de transformer silencieusement la valeur en zéro.
   Future<model.Transaction> _toTransaction(Map<String, Object?> row) async {
     final amountRaw = '${row['amount']}';
     double amount;
     try {
       amount = await CryptoService.decryptNumber(amountRaw);
     } on CryptoException catch (_) {
-      // Échec du déchiffrement du montant -> on ne peut pas créer la transaction
-      // avec un montant douteux ; on propage l'erreur pour que l'appelant sache
-      // qu'il y a un problème de données chiffrées.
-      throw CryptoException('DECRYPT_TRANSACTION_AMOUNT',
-          'Impossible de déchiffrer le montant de la transaction ${row['id']}');
+      // compat legacy clair
+      amount = double.tryParse(amountRaw) ?? 0;
+    } catch (_) {
+      amount = double.tryParse(amountRaw) ?? 0;
+    }
+    Future<String> dec(Object? v) async {
+      final s = (v ?? '').toString();
+      try { return await CryptoService.decrypt(s); } catch (_) { return s; }
     }
     return model.Transaction(
       id: row['id'] as String,
       amount: amount,
-      category: await CryptoService.decrypt(row['category'] as String) as String,
-      description: await CryptoService.decrypt(
-        (row['description'] as String?) ?? '',
-      ),
-      notes: await CryptoService.decrypt((row['notes'] as String?) ?? ''),
-      date: DateTime.parse(await CryptoService.decrypt(row['date'] as String)),
-      type: model.TransactionType.values.byName(
-          await CryptoService.decrypt(row['type'] as String)
-        ),
+      category: await dec(row['category']),
+      description: await dec(row['description']),
+      notes: await dec(row['notes']),
+      date: DateTime.parse(await dec(row['date'])),
+      type: model.TransactionType.values.byName(await dec(row['type'])),
       isDeleted: ((row['is_deleted'] as int?) ?? 0) == 1,
     );
   }
 
-  /// Enregistre le JSON versionné du profil sous forme chiffrée AES-GCM.
-  Future<void> saveUserProfilePayload(String jsonPayload) async {
+  Future<void> saveUserProfilePayload(String jsonPayload, {String userId = 'primary'}) async {
+    final db = await database;
     await db.insert('user_profile', {
-      'id': 'primary',
+      'id': userId,
       'payload': await CryptoService.encrypt(jsonPayload),
+      'userId': userId,
     }, conflictAlgorithm: ConflictAlgorithm.replace);
   }
 
-  Future<String?> getUserProfilePayload() async {
-    final rows = await db.query(
-      'user_profile',
-      where: 'id = ?',
-      whereArgs: ['primary'],
-      limit: 1,
-    );
-    if (rows.isEmpty) return null;
+  Future<String?> getUserProfilePayload({String userId = 'primary'}) async {
+    final db = await database;
+    final rows = await db.query('user_profile', where: 'id = ? AND userId = ?', whereArgs: [userId, userId], limit: 1);
+    if (rows.isEmpty) {
+      final legacy = await db.query('user_profile', where: 'id = ?', whereArgs: [userId], limit: 1);
+      if (legacy.isEmpty) return null;
+      return CryptoService.decrypt(legacy.single['payload'] as String);
+    }
     return CryptoService.decrypt(rows.single['payload'] as String);
   }
 
-  Future<void> updateTransaction(model.Transaction transaction) async {
-
-    await db.update(
-      'transactions',
-      await _toRow(transaction),
-      where: 'id = ?',
-      whereArgs: [transaction.id],
-    );
-  }
-
-  /// Suppression logique : aucune donnée financière n'est réellement effacée,
-  /// la transaction peut être restaurée via [restoreTransaction].
-  Future<void> deleteTransaction(String id) async {
-
-    await db.update(
-      'transactions',
-      {'is_deleted': 1},
-      where: 'id = ?',
-      whereArgs: [id],
-    );
-  }
-
-  /// Restaure une transaction supprimée logiquement.
-  Future<void> restoreTransaction(String id) async {
-
-    await db.update(
-      'transactions',
-      {'is_deleted': 0},
-      where: 'id = ?',
-      whereArgs: [id],
-    );
-  }
-
-  /// Suppression définitive, réservée à l'effacement explicite demandé par
-  /// l'utilisateur (RGPD). Elle n'est jamais appelée par l'écran Transactions.
-  Future<void> purgeTransaction(String id) async {
-
-    await db.delete('transactions', where: 'id = ?', whereArgs: [id]);
-  }
-
-  /// Les transactions supprimées sont exclues par défaut afin qu'elles ne
-  /// remontent ni dans les totaux, ni dans le graphique.
-  Future<List<model.Transaction>> getTransactions({
-    bool includeDeleted = false,
-    String userId = 'primary',
-  }) async {
-
-    final rows = await db.query(
-      'transactions',
-      where: includeDeleted ? 'userId = ?' : 'userId = ? AND is_deleted = 0',
-      whereArgs: [userId],
-      // orderBy retiré : SQLite ne peut pas trier chronologiquement des dates
-      // chiffrées par AES-GCM. Le tri sera appliqué après déchiffrement.
-    )
-
-    // `_toTransaction` déchiffre chaque ligne : le déchiffrement est asynchrone,
-    // la liste est donc construite champ par champ.
-    final transactions = <model.Transaction>[];
-
-    for (final row in rows) {
-      transactions.add(await _toTransaction(row));
-    }
-
-    // ✅ Tri après déchiffrement : garanti chronologique décroissant
-    // Puisque le tri SQL ne peut pas agir sur des valeurs chiffrées,
-    // nous trions ici par DateTime pour assurer l'ordre attendu par l'application.
-    transactions.sort((a, b) => b.date.compareTo(a.date));
-
-    return transactions;
-  }
-
-  /// Convertit un [BudgetEntry] en ligne SQLite, en chiffrant le montant.
-  Future<Map<String, Object?>> _budgetToRow(BudgetEntry budget) async {
-    return {
-      'id': budget.id,
-      'category': budget.category != null ? await CryptoService.encrypt(budget.category!) : null,
-      'amount_cents': await CryptoService.encryptNumber(budget.amountCents),
-      'is_deleted': budget.isDeleted ? 1 : 0,
-      'updated_at': DateTime.now().toIso8601String(),
-      'userId': 'primary',
-    };
-  }
-
-  /// Convertit une ligne SQLite en [BudgetEntry], en déchiffrant le montant.
-  /// Lance une erreur si le déchiffrement échoue, au lieu de transformer
-  /// silencieusement la valeur en zéro.
-  Future<BudgetEntry> _budgetFromRow(Map<String, Object?> row) async {
-    final amountCentsRaw = '${row['amount_cents']}';
-    double amountCents;
-    try {
-      amountCents = await CryptoService.decryptNumber(amountCentsRaw);
-    } on CryptoException catch (_) {
-      // Échec du déchiffrement du montant -> on propage l'erreur plutôt que
-      // de laisser le budget avec un montant zéro invalide.
-      throw CryptoException('DECRYPT_BUDGET_AMOUNT',
-          'Impossible de déchiffrer le montant du budget ${row['id']}');
-    }
-    return BudgetEntry(
-      id: row['id'] as String,
-      category: await CryptoService.decrypt(row['category'] as String) as String?,
-      amountCents: amountCents,
-      isDeleted: ((row['is_deleted'] as int?) ?? 0) == 1,
-    );
-  }
-
-  /// Convertit un [GoalEntry] en ligne SQLite, en chiffrant les champs sensibles.
-  Future<Map<String, Object?>> _goalToRow(GoalEntry goal) async {
-    return {
-      'id': goal.id,
-      'name': await CryptoService.encrypt(goal.name),
-      'target_cents': await CryptoService.encryptNumber(goal.targetCents.toDouble()),
-      'saved_cents': await CryptoService.encryptNumber(goal.savedCents.toDouble()),
-      'category': await CryptoService.encrypt(goal.category),
-      'target_date': goal.targetDate != null ? await CryptoService.encrypt(goal.targetDate!) : null,
-      'recurring_amount_cents': goal.recurringAmountCents != null
-          ? await CryptoService.encryptNumber(goal.recurringAmountCents!.toDouble())
-          : null,
-      'recurring_start_date': goal.recurringStartDate != null
-          ? await CryptoService.encrypt(goal.recurringStartDate!)
-          : null,
-      'milestones': await CryptoService.encrypt(goal.milestones),
-      'created_at': await CryptoService.encrypt(goal.createdAt),
-      'updated_at': await CryptoService.encrypt(goal.updatedAt),
-      'is_deleted': goal.isDeleted ? 1 : 0,
-      'userId': 'primary',
-    };
-  }
-
-  /// Convertit une ligne SQLite en [GoalEntry], en déchiffrant les champs sensibles.
-  /// Lance des erreurs si le déchiffrement échoue, au lieu de transformer
-  /// silencieusement les valeurs en zéro.
-  Future<GoalEntry> _goalFromRow(Map<String, Object?> row) async {
-    String name;
-    try {
-      name = await CryptoService.decrypt(
-        (row['name'] as String?) ?? '',
-      );
-    } on CryptoException catch (_) {
-      name = (row['name'] as String?) ?? '';
-    }
-
-    int targetCents;
-    try {
-      targetCents = (await CryptoService.decryptNumber('${row['target_cents']}')).round();
-    } on CryptoException catch (_) {
-      throw CryptoException('DECRYPT_GOAL_TARGET',
-          'Impossible de déchiffrer la cible du objectif ${row['id']}');
-    }
-
-    int savedCents;
-    try {
-      savedCents = (await CryptoService.decryptNumber('${row['saved_cents']}')).round();
-    } on CryptoException catch (_) {
-      throw CryptoException('DECRYPT_GOAL_SAVED',
-          'Impossible de déchiffrer l'épargne du objectif ${row['id']}');
-    }
-
-    String category;
-    try {
-      category = await CryptoService.decrypt(row['category'] as String? ?? 'other');
-    } on CryptoException catch (_) {
-      category = 'other';
-    }
-
-    String? targetDate;
-    try {
-      final encrypted = row['target_date'] as String?;
-      if (encrypted != null && encrypted.isNotEmpty) {
-        targetDate = await CryptoService.decrypt(encrypted);
-      }
-    } on CryptoException catch (_) {
-      targetDate = null;
-    }
-
-    int? recurringAmountCents;
-    try {
-      final encrypted = row['recurring_amount_cents'];
-      if (encrypted != null) {
-        recurringAmountCents = (await CryptoService.decryptNumber('${encrypted}')).round();
-      }
-    } on CryptoException catch (_) {
-      recurringAmountCents = null;
-    }
-
-    String? recurringStartDate;
-    try {
-      final encrypted = row['recurring_start_date'] as String?;
-      if (encrypted != null && encrypted.isNotEmpty) {
-        recurringStartDate = await CryptoService.decrypt(encrypted);
-      }
-    } on CryptoException catch (_) {
-      recurringStartDate = null;
-    }
-
-    String milestones;
-    try {
-      milestones = await CryptoService.decrypt(row['milestones'] as String? ?? '[25,50,75,100]');
-    } on CryptoException catch (_) {
-      milestones = '[25,50,75,100]';
-    }
-
-    String createdAt;
-    try {
-      createdAt = await CryptoService.decrypt(row['created_at'] as String? ?? DateTime.now().toIso8601String());
-    } on CryptoException catch (_) {
-      createdAt = DateTime.now().toIso8601String();
-    }
-
-    String updatedAt;
-    try {
-      updatedAt = await CryptoService.decrypt(row['updated_at'] as String? ?? DateTime.now().toIso8601String());
-    } on CryptoException catch (_) {
-      updatedAt = DateTime.now().toIso8601String();
-    }
-
-    return GoalEntry(
-      id: row['id'] as String,
-      name: name,
-      targetCents: targetCents,
-      savedCents: savedCents,
-      category: category,
-      targetDate: targetDate,
-      recurringAmountCents: recurringAmountCents,
-      recurringStartDate: recurringStartDate,
-      milestones: milestones,
-      createdAt: createdAt,
-      updatedAt: updatedAt,
-      isDeleted: ((row['is_deleted'] as int?) ?? 0) == 1,
-    );
-  }
-
-  // ── Budgets ──────────────────────────────────────────────────────────
-
-  Future<void> insertBudget(BudgetEntry budget) async {
-
-    await db.insert(
-      'budgets',
-      await _budgetToRow(budget),
-      conflictAlgorithm: ConflictAlgorithm.replace,
-    );
-  }
-
-  Future<void> updateBudget(BudgetEntry budget) async {
-
-    await db.update(
-      'budgets',
-      await _budgetToRow(budget),
-      where: 'id = ?',
-      whereArgs: [budget.id],
-    );
-  }
-
-  /// Suppression logique d'un budget.
-  Future<void> deleteBudget(String id) async {
-
-    await db.update(
-      'budgets',
-      {'is_deleted': 1},
-      where: 'id = ?',
-      whereArgs: [id],
-    );
-  }
-
-  /// Suppression définitive d'un budget (RGPD).
-  Future<void> purgeBudget(String id) async {
-
-    await db.delete('budgets', where: 'id = ?', whereArgs: [id]);
-  }
-
-  /// Liste des budgets non supprimés.
-  Future<List<BudgetEntry>> getBudgets({bool includeDeleted = false, String userId = 'primary'}) async {
-
-    final rows = await db.query(
-      'budgets',
-      where: includeDeleted ? 'userId = ?' : 'userId = ? AND is_deleted = 0',
-      whereArgs: [userId],
-      // orderBy retiré : la colonne category est chiffrée par AES-GCM.
-      // SQLite ne peut pas trier alphabétiquement sur des valeurs chiffrées.
-      // Le tri sera appliqué après déchiffrement ci-dessous.
-    )
-
-    final budgets = <BudgetEntry>[];
-    for (final row in rows) {
-      budgets.add(await _budgetFromRow(row));
-    }
-
-    // ✅ Tri après déchiffrement : les catégories non chiffrées ne peuvent
-    // pas être triées par SQLite. On trie ici par catégorie déchiffrée.
-    // Note : le tri par catégorie chiffrée n'est pas garanti d'être
-    // identique au tri SQL sur texte clair, mais assure une ordre
-    // déterministe après déchiffrement.
-    budgets.sort((a, b) {
-      final catA = a.category;
-      final catB = b.category;
-      // Les budgets sans catégorie (global) viennent en premier
-      if (catA == null && catB == null) return 0;
-      if (catA == null) return -1;
-      if (catB == null) return 1;
-      return catA.compareTo(catB);
-    });
-
-    return budgets;
-  }
-
-  /// Budget global (clé `id = 'global'`).
-  Future<double> getGlobalBudget() async {
-
-    final rows = await db.query(
-      'budgets',
-      where: 'id = ? AND is_deleted = 0 AND userId = ?',
-      whereArgs: ['primary', 'primary'],
-      limit: 1,
-    );
-
-    if (rows.isEmpty) return 0;
-    final entry = await _budgetFromRow(rows.first);
-    return entry.amountCents;
-  }
-
-  /// Définit (ou met à jour) le budget global.
-  Future<void> setGlobalBudget(double amount) async {
-    await insertBudget(
-      BudgetEntry(
-        id: 'global',
-        category: null,
-        amountCents: amount,
-      ),
-    );
-  }
-
-  /// Budget d'une catégorie.
-  Future<double> getCategoryBudget(String category) async {
-
-    final rows = await db.query(
-      'budgets',
-      where: 'category = ? AND is_deleted = 0 AND userId = ?',
-      whereArgs: [category, 'primary'],
-      limit: 1,
-    );
-
-    if (rows.isEmpty) return 0;
-    final entry = await _budgetFromRow(rows.first);
-    return entry.amountCents;
-  }
-
-  /// Définit (ou met à jour) le budget d'une catégorie.
-  Future<void> setCategoryBudget(String category, double amount) async {
-    await insertBudget(
-      BudgetEntry(
-        id: category,
-        category: category,
-        amountCents: amount,
-      ),
-    );
-  }
-
-  /// Supprime le budget d'une catégorie.
-  Future<void> deleteCategoryBudget(String category) async {
-    await deleteBudget(category);
-  }
-
-  // ── Objectifs ────────────────────────────────────────────────────────
-
-  Future<void> insertGoal(GoalEntry goal) async {
-
-    await db.insert(
-      'goals',
-      await _goalToRow(goal),
-      conflictAlgorithm: ConflictAlgorithm.replace,
-    );
-  }
-
-  Future<void> updateGoal(GoalEntry goal) async {
-
-    await db.update(
-      'goals',
-      await _goalToRow(goal),
-      where: 'id = ?',
-      whereArgs: [goal.id],
-    );
-  }
-
-  /// Suppression logique d'un objectif.
-  Future<void> deleteGoal(String id) async {
-
-    await db.update(
-      'goals',
-      {'is_deleted': 1},
-      where: 'id = ?',
-      whereArgs: [id],
-    );
-  }
-
-  /// Suppression définitive d'un objectif (RGPD).
-  Future<void> purgeGoal(String id) async {
-
-    await db.delete('goals', where: 'id = ?', whereArgs: [id]);
-  }
-
-  /// Liste des objectifs non supprimés.
-  Future<List<GoalEntry>> getGoals({bool includeDeleted = false, String userId = 'primary'}) async {
-
-    final rows = await db.query(
-      'goals',
-      where: includeDeleted ? 'userId = ?' : 'userId = ? AND is_deleted = 0',
-      whereArgs: [userId],
-      orderBy: 'updated_at DESC',
-    )
-
-    final goals = <GoalEntry>[];
-    for (final row in rows) {
-      goals.add(await _goalFromRow(row));
-    }
-    return goals;
-  }
-
-  /// Exporte toutes les transactions vers une chaîne CSV.
-  ///
-  /// Colonnes : id, amount, category, description, date, type, isDeleted, notes
-  /// Format date : yyyy-MM-dd (ISO 8601 date only)
-  /// Les montants sont exportés avec 2 décimales (format européen : virgule)
-  Future<String> exportTransactionsToCsv({bool includeDeleted = false}) async {
-    final transactions = await getTransactions(includeDeleted: includeDeleted);
-
-    // En-têtes CSV
-    final rows = <List<String>>[];
-    rows.add(['id', 'amount', 'category', 'description', 'date', 'type', 'isDeleted', 'notes']);
-
-    for (final tx in transactions) {
-      rows.add([
-        tx.id,
-        tx.amount.toStringAsFixed(2).replaceAll('.', ','),
-        tx.category,
-        tx.description,
-        '${tx.date.year}-${tx.date.month.toString().padLeft(2, '0')}-${tx.date.day.toString().padLeft(2, '0')}',
-        tx.type.name,
-        tx.isDeleted ? '1' : '0',
-        tx.notes,
-      ]);
-    }
-
-    return const CsvConverter().convert(rows);
-  }
-
-  /// Importe des transactions depuis une chaîne CSV.
-  ///
-  /// Format attendu : id, amount, category, description, date, type, isDeleted, notes
-  /// Gestion des doublons : INSERT OR REPLACE (UPDATE si ID existe, INSERT sinon)
-  /// Retourne le nombre de lignes importées/mises à jour.
-  Future<int> importTransactionsFromCsv(String csvData) async {
-    final result = const CsvConverter().convert(csvData);
-    if (result.isEmpty || result.length < 2) return 0;
-
-    final headers = result.first.map((e) => e.toString().toLowerCase().trim()).toList();
-    int imported = 0;
-
+  Future<void> insertTransaction(model.Transaction transaction, {String userId = 'primary'}) async {
     final db = await database;
-
-    for (int i = 1; i < result.length; i++) {
-      final row = result[i];
-      if (row.length < 7) continue; // Ligne invalide
-
-      try {
-        final id = row[0]?.toString() ?? '';
-        final amountStr = row[1]?.toString().replaceAll(',', '.') ?? '0';
-        final amount = double.tryParse(amountStr) ?? 0;
-        final category = row[2]?.toString() ?? '';
-        final description = row[3]?.toString() ?? '';
-        final dateStr = row[4]?.toString() ?? '';
-        final typeStr = row[5]?.toString().toLowerCase() ?? 'expense';
-        final isDeletedStr = row[6]?.toString() ?? '0';
-        final notes = row.length > 7 ? row[7]?.toString() ?? '' : '';
-
-        // Validation date
-        final dateParts = dateStr.split('-');
-        if (dateParts.length != 3) continue;
-        final date = DateTime(
-          int.parse(dateParts[0]),
-          int.parse(dateParts[1]),
-          int.parse(dateParts[2]),
-        );
-
-        // Validation type
-        TransactionType type;
-        switch (typeStr) {
-          case 'income':
-            type = model.TransactionType.income;
-            break;
-          case 'expense':
-            type = model.TransactionType.expense;
-            break;
-          case 'transfer':
-            type = model.TransactionType.transfer;
-            break;
-          default:
-            continue; // Type invaligne -> ignorer
-        }
-
-        final isDeleted = isDeletedStr == '1';
-
-        // INSERT OR REPLACE
-        await db.insert(
-          'transactions',
-          {
-            'id': id,
-            'amount': amount,
-            'category': category,
-            'description': description,
-            'date': date.toIso8601String(),
-            'type': type.name,
-            'notes': notes,
-            'is_deleted': isDeleted ? 1 : 0,
-            'userId': 'primary',
-          },
-          conflictAlgorithm: ConflictAlgorithm.replace,
-        );
-
-        imported++;
-      } catch (e) {
-        // Ligne invalide -> ignorer, continuer
-        continue;
-      }
-    }
-
-    return imported;
+    await db.insert('transactions', await _toRow(transaction, userId: userId), conflictAlgorithm: ConflictAlgorithm.replace);
   }
 
-  /// Vérifie si des données en clair ont été détectées et définit un message
-  /// de migration à afficher à l'utilisateur.
-  static void _checkAndSetMigrationMessage(int oldVersion, int newVersion) {
-    // Si on passe de v1/v2 (données en clair) vers v3+ (chiffré), on note
-    // qu'une migration a eu lieu. L'utilisateur sera informé au prochain démarrage.
-    if (oldVersion < 3 && newVersion >= 3) {
-      _migrationMessage = 'Vos données ont été migrées vers le chiffrement renforcé au démarrage précédent.';
-    } else if (oldVersion < 5 && newVersion >= 5) {
-      _migrationMessage = 'Vos budgets et objectifs ont été chiffrés pour une sécurité renforcée.';
-    } else if (oldVersion < 7 && newVersion >= 7) {
-      _migrationMessage = 'Vos objectifs d\'épargne ont été enrichis avec catégories, dates cibles et contributions récurrentes.';
-    } else {
-      _migrationMessage = null;
-    }
+  /// Retourne true si une ligne du [userId] a été mise à jour.
+  Future<bool> updateTransaction(model.Transaction transaction, {String userId = 'primary'}) async {
+    final db = await database;
+    final n = await db.update('transactions', await _toRow(transaction, userId: userId),
+        where: 'id = ? AND userId = ?', whereArgs: [transaction.id, userId]);
+    return n > 0;
   }
 
-  /// Message de migration affiché au premier démarrage après avoir migré
-  /// des données en clair vers le chiffrement.
-  /// À appeler après l'initialisation de la base de données.
-  static String? get migrationMessage => _migrationMessage;
+  Future<void> deleteTransaction(String id, {String userId = 'primary'}) async {
+    final db = await database;
+    await db.update('transactions', {'is_deleted': 1}, where: 'id = ? AND userId = ?', whereArgs: [id, userId]);
+  }
 
-  /// Version de schéma stockée dans la base de données après les migrations.
-  static int get storedSchemaVersion => _storedSchemaVersion;
-}
+  Future<void> restoreTransaction(String id, {String userId = 'primary'}) async {
+    final db = await database;
+    await db.update('transactions', {'is_deleted': 0}, where: 'id = ? AND userId = ?', whereArgs: [id, userId]);
+  }
+
+  Future<void> purgeTransaction(String id, {String userId = 'primary'}) async {
+    final db = await database;
+    await db.delete('transactions', where: 'id = ? AND userId = ?', whereArgs: [id, userId]);
+  }
+
+  Future<List<model.Transaction>> getTransactions({bool includeDeleted = false, String userId = 'primary'}) async {
+    final db = await database;
+    final rows = await db.query(
+      'transactions',
+      where: includeDeleted ? 'userId = ?' : 'userId = ? AND is_deleted = 0',
+      whereArgs: [userId],
+      orderBy: 'date DESC',
+    );
+    final txs = <model.Transaction>[];
+    for (final row in rows) { txs.add(await _toTransaction(row)); }
+    return txs;
+  }

@@ -342,7 +342,7 @@ void main() {
 
     test('ignore un objectif sans cible', () {
       final alerts = NotificationRules.checkGoals(
-        goals: [(name: 'PC', target: 0, saved: 500)],
+        goals: [(name: 'PC', targetEuros: 0, savedEuros: 500)],
         now: now,
       );
 
@@ -351,7 +351,7 @@ void main() {
 
     test('signale un objectif atteint', () {
       final alerts = NotificationRules.checkGoals(
-        goals: [(name: 'PC', target: 1000, saved: 1000)],
+        goals: [(name: 'PC', targetEuros: 1000, savedEuros: 1000)],
         now: now,
       );
 
@@ -361,7 +361,7 @@ void main() {
 
     test('prévient à 80 % d un objectif', () {
       final alerts = NotificationRules.checkGoals(
-        goals: [(name: 'Vacances', target: 1000, saved: 850)],
+        goals: [(name: 'Vacances', targetEuros: 1000, savedEuros: 850)],
         now: now,
       );
 
@@ -371,7 +371,7 @@ void main() {
 
     test('reste muette sur un objectif en retard normal', () {
       final alerts = NotificationRules.checkGoals(
-        goals: [(name: 'PC', target: 1000, saved: 200)],
+        goals: [(name: 'PC', targetEuros: 1000, savedEuros: 200)],
         now: now,
       );
 

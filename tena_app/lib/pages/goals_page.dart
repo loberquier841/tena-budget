@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
+import '../services/app_scope.dart';
 import '../services/goal_service.dart';
 
 class GoalsPage extends StatefulWidget {
@@ -21,7 +22,7 @@ class _GoalsPageState extends State<GoalsPage> {
   }
 
   Future<void> _load() async {
-    final goals = await GoalService.getGoals();
+    final goals = await GoalService.getGoals(userId: AppScope.activeUserId);
 
     if (!mounted) return;
 
@@ -40,7 +41,7 @@ class _GoalsPageState extends State<GoalsPage> {
 
     if (result == null) return;
 
-    await GoalService.addGoal(
+    await GoalService.addGoal(userId: AppScope.activeUserId, 
       name: result.name,
       targetEuros: result.targetEuros,
       savedEuros: result.savedEuros,
@@ -59,7 +60,7 @@ class _GoalsPageState extends State<GoalsPage> {
 
     if (result == null) return;
 
-    await GoalService.updateGoal(
+    await GoalService.updateGoal(userId: AppScope.activeUserId, 
       goal.copyWith(
         name: result.name,
         targetCents: (result.targetEuros * 100).round(),
@@ -80,8 +81,8 @@ class _GoalsPageState extends State<GoalsPage> {
       context: context,
       builder: (dialogContext) {
         return AlertDialog(
-          title: const Text('Supprimer l'objectif ?'),
-          content: Text('L'objectif « ${goal.name} » sera supprimé.'),
+          title: const Text("Supprimer l'objectif ?"),
+          content: Text("L'objectif « ${goal.name} » sera supprimé."),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(dialogContext, false),
@@ -98,7 +99,7 @@ class _GoalsPageState extends State<GoalsPage> {
 
     if (confirmed != true) return;
 
-    await GoalService.deleteGoal(goal.id);
+    await GoalService.deleteGoal(goal.id, userId: AppScope.activeUserId);
     await _load();
   }
 
@@ -118,9 +119,9 @@ class _GoalsPageState extends State<GoalsPage> {
               : goal.savedEuros.toStringAsFixed(2).replaceAll('.', ','),
         );
         final recurringAmountController = TextEditingController(
-          text: goal?.recurringAmountEuros == null
+          text: goal?.recurringAmountCents == null
               ? ''
-              : goal!.recurringAmountEuros!.toStringAsFixed(2).replaceAll('.', ','),
+              : goal!.recurringEuros.toStringAsFixed(2).replaceAll('.', ','),
         );
 
         GoalCategory selectedCategory = goal?.category ?? GoalCategory.other;
@@ -131,7 +132,7 @@ class _GoalsPageState extends State<GoalsPage> {
         return StatefulBuilder(
           builder: (context, setDialogState) {
             return AlertDialog(
-              title: Text(goal == null ? 'Nouvel objectif' : 'Modifier l'objectif'),
+              title: Text(goal == null ? 'Nouvel objectif' : "Modifier l'objectif"),
               content: SingleChildScrollView(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
@@ -323,7 +324,7 @@ class _GoalsPageState extends State<GoalsPage> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Objectifs d'épargne'),
+        title: const Text("Objectifs d'épargne"),
         centerTitle: true,
       ),
       floatingActionButton: FloatingActionButton(
@@ -341,8 +342,8 @@ class _GoalsPageState extends State<GoalsPage> {
                     color: Theme.of(context).colorScheme.outline,
                   ),
                   const SizedBox(height: 16),
-                  Text(
-                    'Aucun objectif pour l'instant',
+                  const Text(
+                    "Aucun objectif pour l'instant",
                     style: TextStyle(
                       fontSize: 20,
                       fontWeight: FontWeight.bold,

@@ -1,4 +1,7 @@
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
+import 'package:path/path.dart' as p;
 // `Transaction` existe aussi dans sqflite_common : on le masque pour garder
 // le modèle de l'application (mêmes raison que database_service.dart).
 import 'package:sqflite_common_ffi/sqflite_ffi.dart' hide Transaction;
@@ -52,19 +55,31 @@ void main() {
 
   // Ces tests s'exécutent sur la vraie base SQLite : la factory FFI est la
   // même que celle utilisée par l'application sur Linux, Windows et macOS.
-  final database = DatabaseService.instance;
-  final keyStore = _TestKeyStore();
+  late DatabaseService database;
+  late _TestKeyStore keyStore;
+  late Directory tempDir;
 
   setUpAll(() {
     sqfliteFfiInit();
-    CryptoService.useKeyStore(keyStore);
+    databaseFactory = databaseFactoryFfi;
   });
 
   setUp(() async {
-    final db = await database.database;
+    tempDir = await Directory.systemTemp.createTemp('tena_fin_test_');
+    await DatabaseService.resetAndDeleteTestDatabase();
+    DatabaseService.testDatabasePath = p.join(tempDir.path, 'test.db');
+    keyStore = _TestKeyStore();
+    CryptoService.debugSetKey(null);
+    CryptoService.useKeyStore(keyStore);
+    database = DatabaseService.instance;
+  });
 
-    await db.delete('transactions');
-    await db.delete('user_profile');
+  tearDown(() async {
+    await DatabaseService.resetAndDeleteTestDatabase();
+    DatabaseService.testDatabasePath = null;
+    if (tempDir.existsSync()) {
+      try { await tempDir.delete(recursive: true); } catch (_) {}
+    }
   });
 
   group('DatabaseService', () {
@@ -321,16 +336,20 @@ void main() {
       expect(summary.balance, 174.5);
     });
 
-    test('la catégorie reste en clair pour le regroupement', () async {
+    test('la catégorie est chiffrée au repos mais utilisable après lecture', () async {
       await database.insertTransaction(
         _transaction(id: 'c4', amount: 10, date: DateTime(2026, 9, 1)),
       );
 
       final db = await database.database;
       final rows = await db.query('transactions');
+      final stored = rows.single['category'] as String;
+      expect(stored, startsWith('tena1:'));
+      expect(stored, isNot(contains('Test')));
 
-      // La catégorie sert de clé de regroupement : elle reste interrogeable.
-      expect(rows.single['category'], 'Test');
+      // Le regroupement applicatif doit continuer à fonctionner.
+      final txs = await database.getTransactions();
+      expect(txs.single.category, 'Test');
     });
   });
 
